@@ -61,15 +61,18 @@ handle_info({tcp, Client, Data}, #state{client=Client, server=Server}=State) ->
 
 % From Server (OCS)
 handle_info({tcp, Server, Data}, #state{client=Client, server=Server}=State) ->
+    io:format("IN ~w~n", [Data]),
     case diameter_processor:process_packet(Data) of 
         [] -> 
             OutData = Data;
 
-        [NewData] ->
-            OutData = NewData
+        Bin ->
+            % io:format("H~p~n", [H]),
+            io:format("T~p~n", [Bin]),
+            OutData = Bin
     end,
 
-    gen_tcp:send(Client, Data),
+    gen_tcp:send(Client, OutData),
     inet:setopts(Server, [{active, once}]),
     {noreply, State}.
 
