@@ -82,11 +82,11 @@ process_packet({false, _, _}) ->
 process_packet({true, true, Acc, HeaderList})->
     % Edit messages
     io:format("next do replace here~n"),
-    % {MessageList, HeaderList} = editor(Acc, HeaderList),
+    {MessageList, HeaderList} = editor(Acc, HeaderList),
     % Pack messages
-    % MessageBin = packer(MessageList, HeaderList),
+    MessageBin = packer(MessageList, HeaderList),
     % Test packing
-    MessageBin = packer(Acc, HeaderList),
+    % MessageBin = packer(Acc, HeaderList),
     io:format("MessageBin~p~n", [MessageBin]),
     MessageBin;
 
