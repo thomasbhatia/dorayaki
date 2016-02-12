@@ -14,6 +14,40 @@
 -include("diameter.hrl").
 -include("lib.hrl").
 
+% -define(AVP_PADDING, [3, 263, 264, 283, 293, 296]).
+% -define(AVP_Type_Unsigned32, [268]).bit
+% -define(AVP_SUPPORT, [268, 456]).
+
+%%====================================================================
+%% Records
+%%====================================================================
+-record(diameter_message,
+        {version,            %%  8-bit unsigned
+         length,             %% 24-bit unsigned
+         is_request,         %% boolean() R flag
+         is_proxiable,       %% boolean() P flag
+         is_error,           %% boolean() E flag
+         is_retransmitted,
+         cmd_code,           %% 24-bit unsigned
+         application_id,     %% 32-bit unsigned
+         hop_by_hop_id,      %% 32-bit unsigned
+         end_to_end_id,      %% 32-bit unsigned
+         raw_data,
+         avps = []
+         }). %% boolean() T flag
+
+
+-record(diameter_avp_new,
+        {code,      %% 32-bit unsigned
+         v,           
+         m,
+         p,
+         length,
+         value,     %% decoded term() decoded | undefined
+         padding    %% Padding = length - 8
+         }).  
+
+
 
 %%====================================================================
 %% TEST API
@@ -64,40 +98,40 @@
 
 % 1. Check Diameter Headers 
 process_packet(<<Bin/binary>>) ->
-    io:format("Bin is ~p~n", [<<Bin/binary>>]),
+    % io:format("Bin is ~p~n", [<<Bin/binary>>]),
     % Check if Headers match search
     process_packet(is_header_match(<<Bin/binary>>));
 
 % 2a. Header match
-process_packet({true, AVPBins, HeaderList}) -> 
+process_packet({true, AVPBins, HeaderList, DiaMessage}) -> 
+    io:format("Headers match~n"),
     % Check if any AVPs match search
-    process_packet(is_AVP_match(true, AVPBins, [], HeaderList));
+    Acc = [],
+    process_packet(is_AVP_match(true, AVPBins, Acc, HeaderList, DiaMessage));
 
 % 2b. Header don't match
-process_packet({false, _, _}) -> 
-    io:format("header no match"),
+process_packet({false, _, _, _}) -> 
+    io:format("header no match~n"),
     [];
 
 % 3a. Header, AVP match and accumulator
-process_packet({true, true, Acc, HeaderList})->
+process_packet({true, true, Acc, HeaderList, DiaMessage})->
     % Edit messages
     io:format("next do replace here~n"),
     {MessageList, HeaderList} = editor(Acc, HeaderList),
     % Pack messages
-    MessageBin = packer(MessageList, HeaderList),
-    % Test packing
-    % MessageBin = packer(Acc, HeaderList),
+    MessageBin = packer(MessageList, HeaderList, DiaMessage),
     io:format("MessageBin~p~n", [MessageBin]),
     MessageBin;
 
 % 3b. AVP value don't match
-process_packet({true, false, _Acc, _HeaderList}) ->
+process_packet({true, false, _Acc, _HeaderList, _DiaMessage}) ->
     io:format("nnno match~n"),
     [];
 
 % 3c. AVP don't match
 process_packet(false) ->
-    io:format("no match, bye"),
+    io:format("no match, bye~n"),
     [].
 
 
@@ -111,7 +145,23 @@ is_header_match(<<Version:8, Length:24, R:1, P:1, E:1, T:1, Reserved:4, Command:
     HeaderList = [{version, Version}, {length, Length}, {request, R}, 
         {proxiable, P}, {error, E}, {retransmitted, T}, {reserved, Reserved}, {commandcode, Command}, 
         {appId, AppId}, {hopByHopId, HopByHopId}, {endToEndId, EndToEndId}],
-    {lists:all(fun(X) -> lists:member(X, HeaderList) end, ?SearchHeader), Rest, HeaderList};
+
+        DiaMessage = #diameter_message
+        {version = Version,      
+         length = Length,   
+         is_request = R,          
+         is_proxiable = P,        
+         is_error = E,            
+         is_retransmitted = T,           
+         cmd_code = Command,            
+         application_id = AppId,      
+         hop_by_hop_id = HopByHopId,       
+         end_to_end_id = EndToEndId,
+         raw_data = [<<Version:8, Length:24, R:1, P:1, E:1, T:1, Reserved:4, Command:24, AppId:32, HopByHopId:32, EndToEndId:32>>],
+         avps = []
+         }, %% boolean() T flag
+
+    {lists:all(fun(X) -> lists:member(X, HeaderList) end, ?SearchHeader), Rest, HeaderList, DiaMessage};
 
 is_header_match(_) ->
     io:format("No understand! ~n"),
@@ -120,7 +170,7 @@ is_header_match(_) ->
 %%%%%%%%
 % Check AVPs match
 %%%%%%%%
-is_AVP_match(true, <<Code:32, Flags:8, Length:24, Rest/binary>>, Acc, HeaderList) ->
+is_AVP_match(true, <<Code:32, Vendor:1, Mandatory:1, Protected:1, _Reserved:5, Length:24, Rest/binary>>, Acc, HeaderList, DiaMessage) ->
     % io:format("~n"),
     io:format("Length ~p~n", [Length]),
 
@@ -135,6 +185,7 @@ is_AVP_match(true, <<Code:32, Flags:8, Length:24, Rest/binary>>, Acc, HeaderList
     io:format("IT Code ~p~n", [Code]),
     io:format("IT ~p~n", [dorayaki_avp_mapper:num_to_type(Code)]),
 
+    %% Optimise!
     case dorayaki_avp_mapper:num_to_type(Code) of 
         {ok, arb} ->
             Value = [binary_to_list(<<_Value:BodyLength>>)];
@@ -154,27 +205,44 @@ is_AVP_match(true, <<Code:32, Flags:8, Length:24, Rest/binary>>, Acc, HeaderList
         % Found Code but value was not what we want, set search to false. Abandon search.
         {value, {Code, _WrongValue}} ->
             Search = false;
-        % Found unknown code, carry on to next avp, set search to true.
+        % Not the code we're looking for so we'll carry on to the next avp, set search to true.
         _ ->
             Search = true
     end,
 
-    is_AVP_match(Search, Rest2, [AVP|Acc], HeaderList);
+    %% Optimise!
+    AVPR = #diameter_avp_new
+        {code = Code,    
+         v = Vendor,  
+         m = Mandatory,  
+         p = Protected,  
+         length = Length,
+         value = Value,
+         padding = Padding
+         },  
+
+    D = DiaMessage,
+    N = D#diameter_message.avps,
+    
+
+    io:format("The d is ~p~n", [D]),
+
+    is_AVP_match(Search, Rest2, [AVP|Acc], HeaderList, D#diameter_message{avps = [AVPR|N]});
 
 
-is_AVP_match(true, <<>>, Acc, HeaderList) ->
+is_AVP_match(true, <<>>, Acc, HeaderList, DiaMessage) ->
     io:format("All done, check if all filters match~n"),
     io:format("Acc is now ~p~n", [Acc]),
     io:format("SearchAVPs is ~p~n", [?SearchAVPs]),
     Stat = lists:all(fun(X) -> lists:member(X, Acc) end, ?SearchAVPs),
     io:format("Stat is ~p~n", [Stat]),
-    {true, Stat, Acc, HeaderList};
+    {true, Stat, Acc, HeaderList, DiaMessage};
 
-is_AVP_match(false, _, _Acc, _HeaderList) ->
+is_AVP_match(false, _, _Acc, _HeaderList, _DiaMessage) ->
     io:format("got false, abandon search~n"),
     false;
 
-is_AVP_match(_, _, _, _) ->
+is_AVP_match(_, _, _, _, _) ->
     io:format("got weird something~n"),
     false.
 
@@ -198,19 +266,11 @@ editor(Acc, HeaderList) ->
 %%%%%%%%%
 % PACKER
 %%%%%%%%%
-packer(AVPList, HeaderList) ->
+packer(AVPList, HeaderList, DiaMessage) ->
     io:format("HeaderList is ~p~n", [HeaderList]),
 
-    AVPBin = iolist_to_binary(packAVP(AVPList)),
+    AVPBin = iolist_to_binary(packAVP(AVPList, DiaMessage)),
     % io:format("Packed AVPBin is ~p~n", [AVPBin]),
-
-    {value,{length, Length}} = lists:keysearch(length, 1, HeaderList),
-    io:format("Length in HeaderList is ~p~n", [Length]),
-
-    % NewHeaderList = lists:keyreplace(length, 1, HeaderList, {length, size(AVPBin)}),
-
-    % {value,{length, NewLength}} = lists:keysearch(length, 1, NewHeaderList),
-    % io:format("NEW Length in HeaderList is ~p~n", [NewLength]),
 
     HeaderBin = packHeader(HeaderList),
     % io:format("HeaderBin is ~p~n", [HeaderBin]),
@@ -229,14 +289,27 @@ packHeader([{version, Version}, {length, Length}, {request, R},
     <<Version:8, Length:24, R:1, P:1, E:1, T:1, Reserved:4, Command:24, AppId:32, HopByHopId:32, EndToEndId:32>>.
    
 
-packAVP(AVPList) ->
-    packAVP(AVPList, []).
+packAVP(AVPList, DiaMessage) ->
+    packAVP(AVPList, [], DiaMessage).
 
-packAVP([{Code, _Value}|AVPList], AVPBin) ->
+packAVP([{Code, _Value}|AVPList], AVPBin, DiaMessage) ->
     io:format("Code is ~p~n", [Code]),
     io:format("Value is ~p~n", [_Value]),
     % io:format("AVPBin is ~p~n", [AVPBin]),
-    Flags = <<0:1,1:1,0:1,0:1,0:1,0:1,0:1,0:1>>,
+
+    Dz = DiaMessage#diameter_message.avps,
+    Lz = lists:keyfind(Code, 2, Dz),
+    io:format("L is now now now ~p~n", [Lz]),
+
+    Vz = Lz#diameter_avp_new.v,
+    Mz = Lz#diameter_avp_new.m,
+    Pz = Lz#diameter_avp_new.p,
+
+    io:format("V is now ~p~n", [Vz]),
+    io:format("M is now ~p~n", [Mz]),
+    io:format("P is now ~p~n", [Pz]),
+
+    Flags = <<Vz:1,Mz:1,Pz:1,0:1,0:1,0:1,0:1,0:1>>,
 
     case dorayaki_avp_mapper:num_to_type(Code) of 
         {ok, arb} ->
@@ -269,7 +342,7 @@ packAVP([{Code, _Value}|AVPList], AVPBin) ->
             io:format("Pad is ~p~n", [Pad]),
 
             % P = <<Padding:Pad/binary>>,
-            Pile = [<<Code:32, 0:1,1:1,0:1,0:1,0:1,0:1,0:1,0:1, Length:24>>, Value, Padding];
+            Pile = [<<Code:32>>, Flags, <<Length:24>>, Value, Padding];
 
         {ok, gro} ->
             Value = list_to_binary(_Value),
@@ -299,7 +372,7 @@ packAVP([{Code, _Value}|AVPList], AVPBin) ->
             % E = <<Padding:Pad>>,
             
             P = <<Padding:Pad/bitstring>>,
-            Pile = [<<Code:32, 0:1,1:1,0:1,0:1,0:1,0:1,0:1,0:1, Length:24>>, Value, Padding];
+            Pile = [<<Code:32>>, Flags, <<Length:24>>, Value, Padding];
 
         {ok, Size} ->
             Value = _Value,
@@ -308,13 +381,13 @@ packAVP([{Code, _Value}|AVPList], AVPBin) ->
             Length = Size,
             io:format("Length is ~p~n", [Length]),
 
-            Pile = <<Code:32, 0:1,1:1,0:1,0:1,0:1,0:1,0:1,0:1, Length:24, Value:32>>
+            Pile = [<<Code:32>>, Flags, <<Length:24>>, <<Value:32>>]
     end,
     io:format("Pile is ~p~n", [Pile]),
     io:format("~n"),
-    packAVP(AVPList, [Pile|AVPBin]);
+    packAVP(AVPList, [Pile|AVPBin], DiaMessage);
     
-packAVP([], AVPBin) ->
+packAVP([], AVPBin, DiaMessage) ->
     AVPBin.
 
     % case dorayaki_avp_mapper:num_to_type(Code) of 
