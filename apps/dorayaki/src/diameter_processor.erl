@@ -14,9 +14,9 @@
 -include("diameter.hrl").
 -include("lib.hrl").
 
-% -define(AVP_PADDING, [3, 263, 264, 283, 293, 296]).
-% -define(AVP_Type_Unsigned32, [268]).bit
-% -define(AVP_SUPPORT, [268, 456]).
+-define(AVP_PADDING, [3, 263, 264, 283, 293, 296]).
+-define(AVP_Type_Unsigned32, [268]).bit
+-define(AVP_SUPPORT, [268, 456]).
 
 %%====================================================================
 %% Records
@@ -138,6 +138,21 @@ process_packet(false) ->
 %%====================================================================
 %% Internal functions
 %%====================================================================
+get_padding(Code, AVP_length) ->
+    case lists:member(Code, ?AVP_PADDING) of
+        true  -> 
+            P = AVP_length rem 4,
+            % io:format("P is  ~w~n", [P]),
+            case P > 0 of 
+                true ->
+                    Pad = ((P - 4) * -1) * 8;
+                false ->
+                    Pad = P 
+            end;
+        false -> Pad = 0
+    end,
+    Pad.
+
 %%%%%%%%
 % Check header match
 %%%%%%%%
@@ -174,7 +189,7 @@ is_AVP_match(true, <<Code:32, Vendor:1, Mandatory:1, Protected:1, _Reserved:5, L
     % io:format("~n"),
     io:format("Length ~p~n", [Length]),
 
-    Padding = diameter_codec:get_padding(Code, Length),
+    Padding = get_padding(Code, Length),
     io:format("Padding is ~p~n", [Padding]),
 
     BodyLength = ((Length * 8) - 64),
@@ -325,7 +340,7 @@ packAVP([{Code, _Value}|AVPList], AVPBin, DiaMessage) ->
             io:format("ValueSizeBit is ~p~n", [ValueSizeBit]),
 
             Length = (4+1+3+ValueSizeBit),
-            Pad = diameter_codec:get_padding(Code, Length),
+            Pad = get_padding(Code, Length),
             Padding = <<0:Pad>>,
 
             io:format("Length is ~p~n", [Length]),
@@ -357,19 +372,12 @@ packAVP([{Code, _Value}|AVPList], AVPBin, DiaMessage) ->
             Length = (4+1+3+ValueSizeBit),
             io:format("Length is ~p~n", [Length]),
 
-            Pad = diameter_codec:get_padding(Code, Length),
+            Pad = get_padding(Code, Length),
             io:format("Pad is ~p~n", [Pad]),
 
             Padding = <<0:Pad>>,
 
             io:format("Flags is ~p~n", [Flags]),
-
-            %D
-            A = <<Code:32>>, 
-            B = Flags, 
-            C = <<Length:24>>, 
-            % D = <<Value:ValueSizeBit>>, 
-            % E = <<Padding:Pad>>,
             
             P = <<Padding:Pad/bitstring>>,
             Pile = [<<Code:32>>, Flags, <<Length:24>>, Value, Padding];
@@ -390,394 +398,394 @@ packAVP([{Code, _Value}|AVPList], AVPBin, DiaMessage) ->
 packAVP([], AVPBin, DiaMessage) ->
     AVPBin.
 
-    % case dorayaki_avp_mapper:num_to_type(Code) of 
-    %     {ok, arb} ->
-    %         Length = (32+8+24+ValueSize),
-    %         io:format("Length is ~p~n", [Length]),
-    %         Pad = diameter_codec:get_padding(Code, Length),
-    %         % io:format("Padding is ~p~n", [Pad]),
+%     % case dorayaki_avp_mapper:num_to_type(Code) of 
+%     %     {ok, arb} ->
+%     %         Length = (32+8+24+ValueSize),
+%     %         io:format("Length is ~p~n", [Length]),
+%     %         Pad = diameter_codec:get_padding(Code, Length),
+%     %         % io:format("Padding is ~p~n", [Pad]),
 
-    %         % io:format("Code is ~p~n", [Code]),
-    %         % io:format("Flags is ~p~n", [Flags]),
-    %         % io:format("Length is ~p~n", [Length]),
-    %         % io:format("ValueBin is ~p~n", [ValueBin]),
-    %         % io:format("ValueSize is ~p~n", [ValueSize]),
-    %         % io:format("Pad is ~p~n", [Pad]),
-    %         % Padding = <<0000:Pad>>,
-    %         % _Code = <<Code:32>>,
-    %         % _Flags = <<Flags/binary>>,
-    %         % _Length = <<Length:8>>,
-    %         Pile = <<Code:32, Flags:8, Length:8, ValueBin:ValueSize, Padding>>;
+%     %         % io:format("Code is ~p~n", [Code]),
+%     %         % io:format("Flags is ~p~n", [Flags]),
+%     %         % io:format("Length is ~p~n", [Length]),
+%     %         % io:format("ValueBin is ~p~n", [ValueBin]),
+%     %         % io:format("ValueSize is ~p~n", [ValueSize]),
+%     %         % io:format("Pad is ~p~n", [Pad]),
+%     %         % Padding = <<0000:Pad>>,
+%     %         % _Code = <<Code:32>>,
+%     %         % _Flags = <<Flags/binary>>,
+%     %         % _Length = <<Length:8>>,
+%     %         Pile = <<Code:32, Flags:8, Length:8, ValueBin:ValueSize, Padding>>;
 
-    %     {ok, Length} ->
-    %         Pile = <<Code:32, Flags:8, Length:8, ValueBin:ValueSize>>
-    % end,
-    % [].
-
-
-% decode_header(Bin) ->
-%     decode_header(Bin, []).
-% decode_header(<<Version:8, Length:24, R:1, P:1, E:1, T:1, Reserved:4, Command:24, AppId:32, HopByHopId:32, EndToEndId:32, AVPs/binary>>, []) ->
-%     [{headers, [{version, Version}, {length, Length}, {request, R}, {proxiable, P}, {error, E}, {retransmitted, T}, {commandcode, Command}]}, {avps, AVPs}].
+%     %     {ok, Length} ->
+%     %         Pile = <<Code:32, Flags:8, Length:8, ValueBin:ValueSize>>
+%     % end,
+%     % [].
 
 
+% % decode_header(Bin) ->
+% %     decode_header(Bin, []).
+% % decode_header(<<Version:8, Length:24, R:1, P:1, E:1, T:1, Reserved:4, Command:24, AppId:32, HopByHopId:32, EndToEndId:32, AVPs/binary>>, []) ->
+% %     [{headers, [{version, Version}, {length, Length}, {request, R}, {proxiable, P}, {error, E}, {retransmitted, T}, {commandcode, Command}]}, {avps, AVPs}].
 
 
-% decode_request(Sock, Bin) ->
-%     io:format("sizeof Bin is ~p~n", [bit_size(Bin)]),
-%     decode_request(Sock, Bin, false, <<>>).
 
-% decode_request(Sock, <<Version:8, Length:24, Rest/binary>> = Bin, false, _) ->
-%     BodyLength = ((Length * 8) - 200),
-%     io:format("length~p~n", [Length]),
-%     io:format("BodyLength~p~n", [BodyLength]),
-%     BitLength = Length*8,
-%     io:format("BitLength~p~n", [BitLength]),
-%     io:format("sizeof Rest is ~p~n", [bit_size(Rest)]),
-%     io:format("sizeof Bin is ~p~n", [bit_size(Bin)]),
 
-%     <<MessageBody:BodyLength, Rest2/bitstring>> = Rest, 
-%     MessageBin = <<Version:8, Length:24, MessageBody:BodyLength>>,
-%     [{headers, HeadersList}, {avps, AVPs}] = diameter_codec:decode_header(MessageBin),
-%     Match = lists:all(fun(X) -> lists:member(X, HeadersList) end, ?SearchHeader),
-%     decode_request(Sock, Rest, Match, AVPs);
+% % decode_request(Sock, Bin) ->
+% %     io:format("sizeof Bin is ~p~n", [bit_size(Bin)]),
+% %     decode_request(Sock, Bin, false, <<>>).
 
-% % Messed up messages
-% decode_request(Sock, <<_>> = Bin, false, []) ->
-%     case gen_tcp:recv(Sock, 0, 0) of
-%         {ok, BinList} ->   
-%             io:format("got more data from sock~w~n", [BinList]),
-%             NewBin = list_to_binary(BinList),
-%             NewBin = <<Bin/binary, NewBin/binary>>;
-%         {error, timeout} ->
-%             io:format("got timeout~n"),
-%             NewBin = Bin;
-%         {error, Reason} ->
-%             NewBin = Bin,
-%             io:format("Errrrrooooo!! ~n"),
-%             exit(Reason)
-%     end,
-%     decode_request(Sock, NewBin, false, []).
+% % decode_request(Sock, <<Version:8, Length:24, Rest/binary>> = Bin, false, _) ->
+% %     BodyLength = ((Length * 8) - 200),
+% %     io:format("length~p~n", [Length]),
+% %     io:format("BodyLength~p~n", [BodyLength]),
+% %     BitLength = Length*8,
+% %     io:format("BitLength~p~n", [BitLength]),
+% %     io:format("sizeof Rest is ~p~n", [bit_size(Rest)]),
+% %     io:format("sizeof Bin is ~p~n", [bit_size(Bin)]),
 
-% decode_request(Message, true, AVPs) ->
-%     {AVP, RestAVPs} = diameter_codec:decode_avps(AVPs),
-%     io:format("AVP is~p~n", [AVP]),
-%     case lists:member(AVP, ?SearchAVPs) of 
-%         true -> 
-%             decode_request(Message, true, RestAVPs);
-%         false ->
-%             []
-%     end;
+% %     <<MessageBody:BodyLength, Rest2/bitstring>> = Rest, 
+% %     MessageBin = <<Version:8, Length:24, MessageBody:BodyLength>>,
+% %     [{headers, HeadersList}, {avps, AVPs}] = diameter_codec:decode_header(MessageBin),
+% %     Match = lists:all(fun(X) -> lists:member(X, HeadersList) end, ?SearchHeader),
+% %     decode_request(Sock, Rest, Match, AVPs);
 
-% decode_request(Message, true, <<>>) ->
-%     io:format("Passed all!!!~n"),
+% % % Messed up messages
+% % decode_request(Sock, <<_>> = Bin, false, []) ->
+% %     case gen_tcp:recv(Sock, 0, 0) of
+% %         {ok, BinList} ->   
+% %             io:format("got more data from sock~w~n", [BinList]),
+% %             NewBin = list_to_binary(BinList),
+% %             NewBin = <<Bin/binary, NewBin/binary>>;
+% %         {error, timeout} ->
+% %             io:format("got timeout~n"),
+% %             NewBin = Bin;
+% %         {error, Reason} ->
+% %             NewBin = Bin,
+% %             io:format("Errrrrooooo!! ~n"),
+% %             exit(Reason)
+% %     end,
+% %     decode_request(Sock, NewBin, false, []).
+
+% % decode_request(Message, true, AVPs) ->
+% %     {AVP, RestAVPs} = diameter_codec:decode_avps(AVPs),
+% %     io:format("AVP is~p~n", [AVP]),
+% %     case lists:member(AVP, ?SearchAVPs) of 
+% %         true -> 
+% %             decode_request(Message, true, RestAVPs);
+% %         false ->
+% %             []
+% %     end;
+
+% % decode_request(Message, true, <<>>) ->
+% %     io:format("Passed all!!!~n"),
+% %     [];
+
+% % decode_request(_Message, false, _AVPs) ->
+% %     [].
+
+
+
+
+% %%====================================================================
+% %% Internal functions
+% %%====================================================================
+
+
+% % decode_command(<<Version:8, Length:24, R:1, P:1, E:1, T:1, Reserved:4, Command:24, AppId:32, HopByHopId:32, EndToEndId:32, AVPs/binary>>, [SearchHeader, SearchAVPs], [Replace]) ->	
+% % 	io:format("SearchHeader is ~p~n", [SearchHeader]),
+% % 	HeaderList = [{version, Version}, {length, Length}, {flags, Flags}, {commandcode, Command}],
+% % 	io:format("HeaderList is ~p~n", [HeaderList]),
+% %     io:format("SearchAVPs is ~p~n", [SearchAVPs]),
+
+% %     % Check if all search terms are in Headers
+% % 	case lists:all(fun(X) -> lists:member(X, HeaderList) end, SearchHeader) of 
+% % 		true ->
+% % 			io:format("Search is go! ~n"),
+% %             OutBinList = [],
+% %             MatchedAVPList = [],
+% %             NewData = decode_avps(AVPs, SearchAVPs, OutBinList, MatchedAVPList);
+            
+% %         false ->
+% %         	io:format("No search, go home! ~n"),
+% %             NewData = []
+% %     end,
+% %     NewData.
+
+
+
+% decode_avps(<<Code:32, Flags:8, Length:24, Rest/binary>>, SearchAVPs, OutBinList, MatchedAVPList) ->
+%     io:format("~n"),
+%     io:format("Code of AVP is ~p~n", [Code]),
+% 	Padding = diameter_codec:get_padding(Code, Length),
+%     io:format("Padding is ~p~n", [Padding]),
+% 	BodyLength = ((Length * 8) - 64) + Padding,
+%     io:format("BodyLength is ~p~n", [BodyLength]),
+% 	<<BodyBin:BodyLength, Rest2/binary>> = <<Rest/binary>>,
+%     AVPBin = <<Code:32, Flags:8, Length:24, BodyBin:BodyLength>>,
+
+%     % case lists:keysearch(Code, 1, SearchAVPs) of
+%     %     {value,{Code, SearchVal}} -> 
+%     %         {_, Decoded_avp_value} = diameter_codec:decode_avp(AVPBin),
+%     %         io:format("Decoded_avp_value is: ~p~n", [Decoded_avp_value]),
+%     %     false ->
+%     %         io:format("Not the AVP you're looking for! ~n"),
+%     %         cheeky_avp(Rest2, SearchAVPs, [AVPBin|OutBinList], MatchedAVPList)
+%     % end,
+
+%     AVPSearchMatch = search_AVP(Code, SearchAVPs, AVPBin),
+%     io:format("AVPSearchMatch match? ~p~n", [AVPSearchMatch]),
+
+%     case AVPSearchMatch of 
+%         {true, AVPValue} ->
+%             io:format("We have match!!!!! ~w~n", [AVPSearchMatch]),
+%             io:format("And the value is  ~w~n", [AVPValue]),
+%             [{AVPSearchMatch, AVPValue}|MatchedAVPList];
+%         {false, _} ->
+%             io:format("No match ~n")
+% 	end,
+    
+%     decode_avps(Rest2, SearchAVPs, [AVPBin|OutBinList], MatchedAVPList);
+
+
+% % append_attr(Attr, State) ->
+% % State#decoder_state{attrs = [Attr | State#decoder_state.attrs]}.
+
+
+
+% decode_avps(<<>>, SearchAVPs, OutBinList, MatchedAVPList) ->
+%     io:format("Finished. OutBinList is ~w~n~n", [OutBinList]),
+%     io:format("MatchedAVPList is ~w~n~n", [MatchedAVPList]),
 %     [];
 
-% decode_request(_Message, false, _AVPs) ->
+% decode_avps(_, SearchAVPs, OutBinList, MatchedAVPList) ->
+%     io:format("Got, something weird. OutBinList is ~w~n", [OutBinList]),
 %     [].
 
 
-
-
-%%====================================================================
-%% Internal functions
-%%====================================================================
-
-
-% decode_command(<<Version:8, Length:24, R:1, P:1, E:1, T:1, Reserved:4, Command:24, AppId:32, HopByHopId:32, EndToEndId:32, AVPs/binary>>, [SearchHeader, SearchAVPs], [Replace]) ->	
-% 	io:format("SearchHeader is ~p~n", [SearchHeader]),
-% 	HeaderList = [{version, Version}, {length, Length}, {flags, Flags}, {commandcode, Command}],
-% 	io:format("HeaderList is ~p~n", [HeaderList]),
-%     io:format("SearchAVPs is ~p~n", [SearchAVPs]),
-
-%     % Check if all search terms are in Headers
-% 	case lists:all(fun(X) -> lists:member(X, HeaderList) end, SearchHeader) of 
-% 		true ->
-% 			io:format("Search is go! ~n"),
-%             OutBinList = [],
-%             MatchedAVPList = [],
-%             NewData = decode_avps(AVPs, SearchAVPs, OutBinList, MatchedAVPList);
+% search_AVP(Code, SearchAVPs, AVPBin) ->
+%     case lists:keysearch(Code, 1, SearchAVPs) of
+%         {value,{Code,SearchVal}} -> 
+%             % If true we decode the AVP and get the value.
+%             io:format("AVP found in Search! And value is: ~p~n", [SearchVal]),
             
+%             case diameter_codec:decode_avp(AVPBin) of
+%                 {ok, AVPValue} ->
+%                     io:format("AVP_value is: ~p~n", [AVPValue]),
+%                     {AVPValue == SearchVal, SearchVal};
+%                 {error, Status} ->
+%                     io:format("Error decoding AVP: ~p~n", [Status]),
+%                     {false, Status}
+%             end;
+
 %         false ->
-%         	io:format("No search, go home! ~n"),
-%             NewData = []
-%     end,
-%     NewData.
+%             % If false we add the bin to the outbinlist
+%             io:format("Not the AVP you're looking for! ~n"),
+%             {false, false}
+%     end.
 
+% % %%%%%%% Sanitize 
+% % preprocess_data(<<Version:8, Length:24, Flags:8, Command:24, T/binary>>, {Client, Server, State})->
+% %     Data = <<Version:8, Length:24, Flags:8, Command:24, T/binary>>,
+% %     % io:format("this is data for test: ~p~n", [Data]),
 
-
-decode_avps(<<Code:32, Flags:8, Length:24, Rest/binary>>, SearchAVPs, OutBinList, MatchedAVPList) ->
-    io:format("~n"),
-    io:format("Code of AVP is ~p~n", [Code]),
-	Padding = diameter_codec:get_padding(Code, Length),
-    io:format("Padding is ~p~n", [Padding]),
-	BodyLength = ((Length * 8) - 64) + Padding,
-    io:format("BodyLength is ~p~n", [BodyLength]),
-	<<BodyBin:BodyLength, Rest2/binary>> = <<Rest/binary>>,
-    AVPBin = <<Code:32, Flags:8, Length:24, BodyBin:BodyLength>>,
-
-    % case lists:keysearch(Code, 1, SearchAVPs) of
-    %     {value,{Code, SearchVal}} -> 
-    %         {_, Decoded_avp_value} = diameter_codec:decode_avp(AVPBin),
-    %         io:format("Decoded_avp_value is: ~p~n", [Decoded_avp_value]),
-    %     false ->
-    %         io:format("Not the AVP you're looking for! ~n"),
-    %         cheeky_avp(Rest2, SearchAVPs, [AVPBin|OutBinList], MatchedAVPList)
-    % end,
-
-    AVPSearchMatch = search_AVP(Code, SearchAVPs, AVPBin),
-    io:format("AVPSearchMatch match? ~p~n", [AVPSearchMatch]),
-
-    case AVPSearchMatch of 
-        {true, AVPValue} ->
-            io:format("We have match!!!!! ~w~n", [AVPSearchMatch]),
-            io:format("And the value is  ~w~n", [AVPValue]),
-            [{AVPSearchMatch, AVPValue}|MatchedAVPList];
-        {false, _} ->
-            io:format("No match ~n")
-	end,
-    
-    decode_avps(Rest2, SearchAVPs, [AVPBin|OutBinList], MatchedAVPList);
-
-
-% append_attr(Attr, State) ->
-% State#decoder_state{attrs = [Attr | State#decoder_state.attrs]}.
-
-
-
-decode_avps(<<>>, SearchAVPs, OutBinList, MatchedAVPList) ->
-    io:format("Finished. OutBinList is ~w~n~n", [OutBinList]),
-    io:format("MatchedAVPList is ~w~n~n", [MatchedAVPList]),
-    [];
-
-decode_avps(_, SearchAVPs, OutBinList, MatchedAVPList) ->
-    io:format("Got, something weird. OutBinList is ~w~n", [OutBinList]),
-    [].
-
-
-search_AVP(Code, SearchAVPs, AVPBin) ->
-    case lists:keysearch(Code, 1, SearchAVPs) of
-        {value,{Code,SearchVal}} -> 
-            % If true we decode the AVP and get the value.
-            io:format("AVP found in Search! And value is: ~p~n", [SearchVal]),
+% %     case Command =:= 272 of 
+% %         true ->
+% %             % io:format("It's 272: ~n"),
+% %             process_data(Data, {Client, Server, State});
             
-            case diameter_codec:decode_avp(AVPBin) of
-                {ok, AVPValue} ->
-                    io:format("AVP_value is: ~p~n", [AVPValue]),
-                    {AVPValue == SearchVal, SearchVal};
-                {error, Status} ->
-                    io:format("Error decoding AVP: ~p~n", [Status]),
-                    {false, Status}
-            end;
+% %         false ->
+% %             % io:format("Not 272 ~n"),
+% %             gen_tcp:send(Client, Data),
+% %             inet:setopts(Server, [{active, once}]),
+% %             {noreply, State}
+% %     end;
 
-        false ->
-            % If false we add the bin to the outbinlist
-            io:format("Not the AVP you're looking for! ~n"),
-            {false, false}
-    end.
+% % preprocess_data(Data , {Client, Server, State})->
+% %     % io:format("this is BAD data: ~p~n", [Data]),
+% %     gen_tcp:send(Client, Data),
+% %     inet:setopts(Server, [{active, once}]),
+% %     {noreply, State}.
+% % %%%%%%%
 
-% %%%%%%% Sanitize 
-% preprocess_data(<<Version:8, Length:24, Flags:8, Command:24, T/binary>>, {Client, Server, State})->
-%     Data = <<Version:8, Length:24, Flags:8, Command:24, T/binary>>,
-%     % io:format("this is data for test: ~p~n", [Data]),
+% % %%%%%%% process
+% % process_data(<<Header:160 , Body/binary>>) ->
+% %     % io:format("Bin: ~w~n", [Bin]),
+% %     Bin = <<Header:160 , Body/binary>>,
 
-%     case Command =:= 272 of 
-%         true ->
-%             % io:format("It's 272: ~n"),
-%             process_data(Data, {Client, Server, State});
-            
-%         false ->
-%             % io:format("Not 272 ~n"),
-%             gen_tcp:send(Client, Data),
-%             inet:setopts(Server, [{active, once}]),
-%             {noreply, State}
-%     end;
+% %     % io:format("=+=+=+=+=+=+=+=+=+=+=+=+= ~n~n~n"),
 
-% preprocess_data(Data , {Client, Server, State})->
-%     % io:format("this is BAD data: ~p~n", [Data]),
-%     gen_tcp:send(Client, Data),
-%     inet:setopts(Server, [{active, once}]),
-%     {noreply, State}.
+% %     <<_:8, Length:24, _:32, _/binary>> = <<Header:160>>,
+% %     % io:format("== Length is: ~w~n~n", [Length]),
+
+% %     Length_Bit = Length * 8,
+% %     % io:format("== Length_Bit is: ~w~n~n", [Length_Bit]),
+
+% %     Real_Length_Bit = bit_size(Bin),
+% %     % io:format("== Real_Length_Bit is: ~w~n~n", [Real_Length_Bit]),
+
+% %     % io:format("=+=+=+=+=+=+=+=+=+=+=+=+= ~n~n~n"),
+
+% %     case Real_Length_Bit < Length_Bit of 
+% %         true ->
+% %             % io:format("Smaller ~n~n"),
+% %             Rest = <<>>,
+% %             TOSEND = Bin;
+% %         false ->
+% %             % io:format("Bigger ~n~n"),
+% %             <<Packet:Length_Bit/bitstring, Rest/bitstring>> = Bin,
+% %             Data = mprocess_data(<<Packet:Length_Bit/bitstring>>),
+% %             % io:format("What is +DATA+ here ~w~n", [Data]),
+% %             TOSEND = Data
+% %     end,
+
+% %     % gen_tcp:send(Client, TOSEND),
+% %     % inet:setopts(Server, [{active, once}]),
+% %     % {noreply, State},
+
+% %     process_data(Rest);
+
+
+% % process_data(TOSEND) ->
+% %     % io:format("this is Fragmented data: ~p~n", [TOSEND]),
+% %     % gen_tcp:send(Client, TOSEND),
+% %     % inet:setopts(Server, [{active, once}]),
+% %     % {noreply, State}.
+% %     [].
+% % %%%%%%%
+
 % %%%%%%%
+% mprocess_data(<<Bin/binary>>) ->
+%     Data = <<Bin/binary>>,
 
-% %%%%%%% process
-% process_data(<<Header:160 , Body/binary>>) ->
-%     % io:format("Bin: ~w~n", [Bin]),
-%     Bin = <<Header:160 , Body/binary>>,
+%     % % Decode AVPs
+%     <<Header:160, Rest/binary>> = Bin,
 
-%     % io:format("=+=+=+=+=+=+=+=+=+=+=+=+= ~n~n~n"),
+%     % <<Version:8, PacketLength:24, R:1, P:1, E:1, T:1, Reserved:4, Command:24, Application_id:32, H_by_hop_ID:32, E_to_E_ID:32>> = <<Header:160>>,
+%     <<_:8, PacketLength:24, _:32, _:32, _:32, _:32>> = <<Header:160>>,
 
-%     <<_:8, Length:24, _:32, _/binary>> = <<Header:160>>,
-%     % io:format("== Length is: ~w~n~n", [Length]),
+%     HeaderByte = 20,
+%     AVPLengthBit = ((PacketLength - HeaderByte) * 8),
 
-%     Length_Bit = Length * 8,
-%     % io:format("== Length_Bit is: ~w~n~n", [Length_Bit]),
+%     <<AVPBIN:AVPLengthBit/bitstring>> = <<Rest/binary>>,
 
-%     Real_Length_Bit = bit_size(Bin),
-%     % io:format("== Real_Length_Bit is: ~w~n~n", [Real_Length_Bit]),
 
-%     % io:format("=+=+=+=+=+=+=+=+=+=+=+=+= ~n~n~n"),
+%     AVPs = diameter_codec:decode_avps(AVPBIN),
+%     % io:format("Final AVPs are here ~w~n", [AVPs]),
 
-%     case Real_Length_Bit < Length_Bit of 
-%         true ->
-%             % io:format("Smaller ~n~n"),
-%             Rest = <<>>,
-%             TOSEND = Bin;
-%         false ->
-%             % io:format("Bigger ~n~n"),
-%             <<Packet:Length_Bit/bitstring, Rest/bitstring>> = Bin,
-%             Data = mprocess_data(<<Packet:Length_Bit/bitstring>>),
-%             % io:format("What is +DATA+ here ~w~n", [Data]),
-%             TOSEND = Data
+%     % AVPs_dict0 = dict:new(),
+%     AVPs_dict = dict:from_list(AVPs),
+%     % io:format("AVPs_dict are here ~w~n", [AVPs_dict]), 
+
+%     % % Look for CC-Request-Type value = 1 (CCR-I)
+%     % Entry_416 = dict:find(416, AVPs_dict),  
+%     % % io:format("Entry_416 is: ~w~n", [Entry_416]), 
+
+%     % % Look for Result-Code, 268
+%     % Entry_268 = dict:find(268, AVPs_dict),
+%     % % io:format("Entry_268 is: ~w~n", [Entry_268]), 
+
+%     % % Look for MSCC 4012
+%     % Entry_456 = dict:find(456, AVPs_dict),
+%     % % io:format("Entry_456 is: ~w~n", [Entry_456]), 
+%     % % io:format("Multipass is: ~w~n", [[Entry_416, Entry_268, Entry_456]]), 
+
+%     Filter = check_filter([dict:find(416, AVPs_dict), dict:find(268, AVPs_dict), dict:find(456, AVPs_dict)]),
+%     % io:format("check_filter is: ~w~n", [Filter]), 
+
+%     case Filter of 
+%         {ok, true} ->
+%             % io:format("RED ~n"),
+%             ENC_AVPs_List = diameter_codec:encode_avps(AVPs),
+%             % io:format("ENC_AVPs_List value is: ~p~n", [ENC_AVPs_List]),
+%             % io:format("Header value is: ~p~n", [<<Header:160>>]),
+
+%             ENC_AVPs_flat = lists:flatten(ENC_AVPs_List),
+%             % io:format("SFLAT is now ~w~n", [ENC_AVPs_flat]),
+
+%             _AVP = list_to_binary(ENC_AVPs_flat),
+%             _Head = <<Header:160>>,
+%             TOSEND = <<_Head/binary, _AVP/binary>>;
+%             % io:format("TOSEND is now ~w~n", [TOSEND]);
+%         {ok, false} ->
+%             % io:format("Green ~n"),
+%             TOSEND = Data            
+%     end,
+%     TOSEND.
+
+
+% check_filter([{ok, AVP_416}, {ok, AVP_268}, {ok, AVP_456}]) ->   
+%     % io:format("check_filter 1 ok ~n"), 
+%     % io:format("AVP_416: ~w~n", [AVP_416#diameter_avp.value]),
+%     % io:format("AVP_268: ~w~n", [AVP_268#diameter_avp.value]),
+%     % io:format("AVP_456: ~w~n", [AVP_456#diameter_avp.value]),
+
+%     check_filter(AVP_416#diameter_avp.value, AVP_268#diameter_avp.value, AVP_456);
+
+% check_filter(_) ->
+%     % io:format("Got bad values ~n"),
+%     {ok, false}.
+
+% check_filter(1, 2001, AVP_456) ->
+%     % io:format("check_filter 2 ok ~n"), 
+
+%     % io:format("Got good values ~n"),
+%     MSCC_dict = dict:from_list(AVP_456#diameter_avp.value),
+%     % io:format("MSCC_dict_new is: ~w~n", [MSCC_dict]), 
+
+%     % Look for 268 in MSCC
+%     MSCC_268_find = dict:find(268, MSCC_dict),
+%     % io:format("MSCC_268_new is: ~w~n", [MSCC_268_find]),
+
+%     case MSCC_268_find of 
+%         {ok, MSCC_268} ->
+%             <<Value:32>> = MSCC_268#diameter_avp.value;
+%             % io:format("MSCC_268 value is: ~w~n", [MSCC_268#diameter_avp.value]);
+%         _ -> 
+%             % io:format("MSCC_268 we got 0"),
+%             Value = 0
 %     end,
 
-%     % gen_tcp:send(Client, TOSEND),
-%     % inet:setopts(Server, [{active, once}]),
-%     % {noreply, State},
+%     % io:format("MSCC_268_new value is: ~w~n", [Value]),
 
-%     process_data(Rest);
+%     check_filter_mscc(Value);
 
+% check_filter(2, 2001, AVP_456) ->
+%     % io:format("check_filter 2 ok ~n"), 
 
-% process_data(TOSEND) ->
-%     % io:format("this is Fragmented data: ~p~n", [TOSEND]),
-%     % gen_tcp:send(Client, TOSEND),
-%     % inet:setopts(Server, [{active, once}]),
-%     % {noreply, State}.
-%     [].
-% %%%%%%%
+%     % io:format("Got good values ~n"),
+%     MSCC_dict = dict:from_list(AVP_456#diameter_avp.value),
+%     % io:format("MSCC_dict_new is: ~w~n", [MSCC_dict]), 
 
-%%%%%%%
-mprocess_data(<<Bin/binary>>) ->
-    Data = <<Bin/binary>>,
+%     % Look for 268 in MSCC
+%     MSCC_268_find = dict:find(268, MSCC_dict),
+%     % io:format("MSCC_268_new is: ~w~n", [MSCC_268_find]),
 
-    % % Decode AVPs
-    <<Header:160, Rest/binary>> = Bin,
+%     case MSCC_268_find of 
+%         {ok, MSCC_268} ->
+%             <<Value:32>> = MSCC_268#diameter_avp.value;
+%             % io:format("MSCC_268 value is: ~w~n", [MSCC_268#diameter_avp.value]);
+%         _ -> 
+%             % io:format("MSCC_268 we got 0"),
+%             Value = 0
+%     end,
 
-    % <<Version:8, PacketLength:24, R:1, P:1, E:1, T:1, Reserved:4, Command:24, Application_id:32, H_by_hop_ID:32, E_to_E_ID:32>> = <<Header:160>>,
-    <<_:8, PacketLength:24, _:32, _:32, _:32, _:32>> = <<Header:160>>,
+%     % io:format("MSCC_268_new value is: ~w~n", [Value]),
 
-    HeaderByte = 20,
-    AVPLengthBit = ((PacketLength - HeaderByte) * 8),
-
-    <<AVPBIN:AVPLengthBit/bitstring>> = <<Rest/binary>>,
+%     check_filter_mscc(Value);
 
 
-    AVPs = diameter_codec:decode_avps(AVPBIN),
-    % io:format("Final AVPs are here ~w~n", [AVPs]),
-
-    % AVPs_dict0 = dict:new(),
-    AVPs_dict = dict:from_list(AVPs),
-    % io:format("AVPs_dict are here ~w~n", [AVPs_dict]), 
-
-    % % Look for CC-Request-Type value = 1 (CCR-I)
-    % Entry_416 = dict:find(416, AVPs_dict),  
-    % % io:format("Entry_416 is: ~w~n", [Entry_416]), 
-
-    % % Look for Result-Code, 268
-    % Entry_268 = dict:find(268, AVPs_dict),
-    % % io:format("Entry_268 is: ~w~n", [Entry_268]), 
-
-    % % Look for MSCC 4012
-    % Entry_456 = dict:find(456, AVPs_dict),
-    % % io:format("Entry_456 is: ~w~n", [Entry_456]), 
-    % % io:format("Multipass is: ~w~n", [[Entry_416, Entry_268, Entry_456]]), 
-
-    Filter = check_filter([dict:find(416, AVPs_dict), dict:find(268, AVPs_dict), dict:find(456, AVPs_dict)]),
-    % io:format("check_filter is: ~w~n", [Filter]), 
-
-    case Filter of 
-        {ok, true} ->
-            % io:format("RED ~n"),
-            ENC_AVPs_List = diameter_codec:encode_avps(AVPs),
-            % io:format("ENC_AVPs_List value is: ~p~n", [ENC_AVPs_List]),
-            % io:format("Header value is: ~p~n", [<<Header:160>>]),
-
-            ENC_AVPs_flat = lists:flatten(ENC_AVPs_List),
-            % io:format("SFLAT is now ~w~n", [ENC_AVPs_flat]),
-
-            _AVP = list_to_binary(ENC_AVPs_flat),
-            _Head = <<Header:160>>,
-            TOSEND = <<_Head/binary, _AVP/binary>>;
-            % io:format("TOSEND is now ~w~n", [TOSEND]);
-        {ok, false} ->
-            % io:format("Green ~n"),
-            TOSEND = Data            
-    end,
-    TOSEND.
-
-
-check_filter([{ok, AVP_416}, {ok, AVP_268}, {ok, AVP_456}]) ->   
-    % io:format("check_filter 1 ok ~n"), 
-    % io:format("AVP_416: ~w~n", [AVP_416#diameter_avp.value]),
-    % io:format("AVP_268: ~w~n", [AVP_268#diameter_avp.value]),
-    % io:format("AVP_456: ~w~n", [AVP_456#diameter_avp.value]),
-
-    check_filter(AVP_416#diameter_avp.value, AVP_268#diameter_avp.value, AVP_456);
-
-check_filter(_) ->
-    % io:format("Got bad values ~n"),
-    {ok, false}.
-
-check_filter(1, 2001, AVP_456) ->
-    % io:format("check_filter 2 ok ~n"), 
-
-    % io:format("Got good values ~n"),
-    MSCC_dict = dict:from_list(AVP_456#diameter_avp.value),
-    % io:format("MSCC_dict_new is: ~w~n", [MSCC_dict]), 
-
-    % Look for 268 in MSCC
-    MSCC_268_find = dict:find(268, MSCC_dict),
-    % io:format("MSCC_268_new is: ~w~n", [MSCC_268_find]),
-
-    case MSCC_268_find of 
-        {ok, MSCC_268} ->
-            <<Value:32>> = MSCC_268#diameter_avp.value;
-            % io:format("MSCC_268 value is: ~w~n", [MSCC_268#diameter_avp.value]);
-        _ -> 
-            % io:format("MSCC_268 we got 0"),
-            Value = 0
-    end,
-
-    % io:format("MSCC_268_new value is: ~w~n", [Value]),
-
-    check_filter_mscc(Value);
-
-check_filter(2, 2001, AVP_456) ->
-    % io:format("check_filter 2 ok ~n"), 
-
-    % io:format("Got good values ~n"),
-    MSCC_dict = dict:from_list(AVP_456#diameter_avp.value),
-    % io:format("MSCC_dict_new is: ~w~n", [MSCC_dict]), 
-
-    % Look for 268 in MSCC
-    MSCC_268_find = dict:find(268, MSCC_dict),
-    % io:format("MSCC_268_new is: ~w~n", [MSCC_268_find]),
-
-    case MSCC_268_find of 
-        {ok, MSCC_268} ->
-            <<Value:32>> = MSCC_268#diameter_avp.value;
-            % io:format("MSCC_268 value is: ~w~n", [MSCC_268#diameter_avp.value]);
-        _ -> 
-            % io:format("MSCC_268 we got 0"),
-            Value = 0
-    end,
-
-    % io:format("MSCC_268_new value is: ~w~n", [Value]),
-
-    check_filter_mscc(Value);
-
-
-check_filter(_, _, _) ->
-    % io:format("Got bad values ~n"),
-    {ok, false}.
+% check_filter(_, _, _) ->
+%     % io:format("Got bad values ~n"),
+%     {ok, false}.
 
 
 
-% Check MSCCs
-check_filter_mscc(4012) ->
-    % io:format("P is 4012 ~n"),
-    {ok, true};
+% % Check MSCCs
+% check_filter_mscc(4012) ->
+%     % io:format("P is 4012 ~n"),
+%     {ok, true};
 
-check_filter_mscc(_) ->
-    % io:format("Got MSCC bad values ~n"),
-    {ok, false}.
+% check_filter_mscc(_) ->
+%     % io:format("Got MSCC bad values ~n"),
+    % {ok, false}.
