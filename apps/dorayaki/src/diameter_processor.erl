@@ -285,19 +285,16 @@ editor(Acc, HeaderList) ->
 packer(AVPList, HeaderList, DiaMessage) ->
     io:format("HeaderList is ~p~n", [HeaderList]),
 
-    AVPBin = iolist_to_binary(packAVP(AVPList, DiaMessage)),
+    AVPBins = iolist_to_binary(packAVP(AVPList, DiaMessage)),
     % io:format("Packed AVPBin is ~p~n", [AVPBin]),
 
     HeaderBin = packHeader(HeaderList),
     % io:format("HeaderBin is ~p~n", [HeaderBin]),
     io:format("Actual size of Header is ~p~n", [size(HeaderBin)]),
 
-    io:format("Actual size of AVPBinis ~p~n", [size(AVPBin)]),
+    io:format("Actual size of AVPBinis ~p~n", [size(AVPBins)]),
 
-    _BIN = [HeaderBin, AVPBin],
-    BIN = iolist_to_binary(_BIN),
-    % io:format("BIN is ~p~n", [BIN]),
-    BIN.
+    iolist_to_binary([HeaderBin, AVPBins]).
 
 packHeader([{version, Version}, {length, Length}, {request, R}, 
         {proxiable, P}, {error, E}, {retransmitted, T}, {reserved, Reserved}, {commandcode, Command}, 
@@ -308,10 +305,10 @@ packHeader([{version, Version}, {length, Length}, {request, R},
 packAVP(AVPList, DiaMessage) ->
     packAVP(AVPList, [], DiaMessage).
 
-packAVP([{Code, _Value}|AVPList], AVPBin, DiaMessage) ->
+packAVP([{Code, _Value}|AVPList], AVPBins, DiaMessage) ->
     io:format("Code is ~p~n", [Code]),
     io:format("Value is ~p~n", [_Value]),
-    % io:format("AVPBin is ~p~n", [AVPBin]),
+    % io:format("AVPBins is ~p~n", [AVPBins]),
 
     Dz = DiaMessage#diameter_message.avps,
     Lz = lists:keyfind(Code, 2, Dz),
@@ -326,57 +323,36 @@ packAVP([{Code, _Value}|AVPList], AVPBin, DiaMessage) ->
     io:format("P is now ~p~n", [Pz]),
 
     Flags = <<Vz:1,Mz:1,Pz:1,0:1,0:1,0:1,0:1,0:1>>,
+    io:format("Flags is ~p~n", [Flags]),
 
     case dorayaki_avp_mapper:num_to_type(Code) of 
-        {ok, arb} ->
-            [_V] = _Value,
-            
+        {ok, arb} ->            
             Value = list_to_binary(_Value),
             io:format("Value is ~p~n", [Value]),
-           
-            ValueSize = size(Value),
-            io:format("arb ValueSize is ~p~n", [ValueSize]),
 
-            ValueSizeBit = ValueSize,
-            io:format("ValueSizeBit is ~p~n", [ValueSizeBit]),
-
-            Length = (4+1+3+ValueSizeBit),
-            Pad = get_padding(Code, Length),
-            Padding = <<0:Pad>>,
-
+            Length = (4+1+3+size(Value)),
             io:format("Length is ~p~n", [Length]),
-            io:format("Code is ~p~n", [Code]),
-            io:format("Flags is ~p~n", [Flags]),
 
-            io:format("Value is ~p~n", [Value]),
-
-            io:format("ValueSize is ~p~n", [ValueSize]),
+            Pad = get_padding(Code, Length),
             io:format("Pad is ~p~n", [Pad]),
 
-            % P = <<Padding:Pad/binary>>,
-            Pile = [<<Code:32>>, Flags, <<Length:24>>, Value, Padding];
+            Padding = <<0:Pad>>,
+            
+            AVPBin = [<<Code:32>>, Flags, <<Length:24>>, Value, Padding];
 
         {ok, gro} ->
             Value = list_to_binary(_Value),
             io:format("Value is ~p~n", [Value]),
 
-            ValueSize = size(Value),
-            io:format("gro ValueSize is ~p~n", [ValueSize]),
-
-            ValueSizeBit = ValueSize,
-            io:format("ValueSizeBit is ~p~n", [ValueSizeBit]),
-
-            Length = (4+1+3+ValueSizeBit),
+            Length = (4+1+3+size(Value)),
             io:format("Length is ~p~n", [Length]),
 
             Pad = get_padding(Code, Length),
             io:format("Pad is ~p~n", [Pad]),
 
             Padding = <<0:Pad>>,
-
-            io:format("Flags is ~p~n", [Flags]),
             
-            Pile = [<<Code:32>>, Flags, <<Length:24>>, Value, Padding];
+            AVPBin = [<<Code:32>>, Flags, <<Length:24>>, Value, Padding];
 
         {ok, Size} ->
             Value = _Value,
@@ -385,14 +361,14 @@ packAVP([{Code, _Value}|AVPList], AVPBin, DiaMessage) ->
             Length = Size,
             io:format("Length is ~p~n", [Length]),
 
-            Pile = [<<Code:32>>, Flags, <<Length:24>>, <<Value:32>>]
+            AVPBin = [<<Code:32>>, Flags, <<Length:24>>, <<Value:32>>]
     end,
-    io:format("Pile is ~p~n", [Pile]),
+    io:format("Pile is ~p~n", [AVPBin]),
     io:format("~n"),
-    packAVP(AVPList, [Pile|AVPBin], DiaMessage);
+    packAVP(AVPList, [AVPBin|AVPBins], DiaMessage);
     
-packAVP([], AVPBin, DiaMessage) ->
-    AVPBin.
+packAVP([], AVPBins, DiaMessage) ->
+    AVPBins.
 
 
 %     decode_avps(Rest2, SearchAVPs, [AVPBin|OutBinList], MatchedAVPList);
