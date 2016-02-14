@@ -192,6 +192,7 @@ AVP_TYPE = [
 {297, ?Grouped},
 {298, ?Unsigned32},
 {299, ?Unsigned32},
+{456, ?Grouped},
 {480, ?Enumerated},
 {483, ?Enumerated},
 {485, ?Unsigned32}],
