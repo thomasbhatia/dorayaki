@@ -16,7 +16,7 @@ Build & Test
 
 Set client port to 3869
 Set host port to 3868
-Open mc:
+Open nc:
  nc -t -v -l 3868
 Run telnet:
  telnet localhost 3869
