@@ -44,7 +44,8 @@
          length,
          value,     %% decoded term() decoded | undefined
          padding,    %% Padding = length - 8
-         raw_data
+         raw_data,
+         grouped = []
          }).  
 
 
@@ -74,7 +75,7 @@
         192,64,0,0,12,0,0,7,8>>).
 
 -define(SearchHeader, [{commandcode, 271}]).
--define(SearchAVPs, [{?Result_Code, 2001}, {?Auth_Session_State, 1}]).
+-define(SearchAVPs, [{?Auth_Session_State, 1}, {?Multiple_Services_Credit_Control, [{?Result_Code, 4012}]}]).
 % -define(SearchAVPs, [{?Result_Code, 2001}, {?Multiple_Services_Credit_Control, [{?Result_Code, 4012}]}]).
 % -define(SearchAVPs, [{?Result_Code, 2001}, {?Auth_Session_State, 1}, {?Host_IP_Address, 2}]).
 -define(ReplaceAVP, [{?Result_Code, 4012}]).
@@ -201,48 +202,76 @@ is_AVP_match(true, <<Code:32, Vendor:1, Mandatory:1, Protected:1, _Reserved:5, L
     io:format("IT ~p~n", [dorayaki_avp_mapper:num_to_type(Code)]),
 
     %% Optimise!
-    case dorayaki_avp_mapper:num_to_type(Code) of 
+    Type = dorayaki_avp_mapper:num_to_type(Code),
+    case Type of 
         {ok, arb} ->
             Value = [binary_to_list(<<_Value:BodyLength>>)];
         {ok, gro} ->
-            [Value] = [binary_to_list(<<_Value:BodyLength>>)];
+            Value = <<_Value:BodyLength>>;
+            % is_Grouped_AVP_match(<<_Value:BodyLength>>),
         {ok, _Type} ->
             Value = _Value
     end,
 
-    AVP = {Code, Value},
-    io:format("got AVP with value ~p~n", [AVP]),
+    AVPR1 = #diameter_avp_new
+    {code = Code,    
+     v = Vendor,  
+     m = Mandatory,  
+     p = Protected,  
+     length = Length,
+     value = Value,
+     padding = Padding,
+     raw_data = [<<Code:32, Vendor:1, Mandatory:1, Protected:1, _Reserved:5, Length:24>>, <<_Value:BodyLength, 0:Padding>>]
+     },  
 
+    io:format("GROUP key search~p~n", [lists:keysearch(Code, 1, ?SearchAVPs)]),
+    io:format("WHat is TYpe:~p~n", [Type]),
     case lists:keysearch(Code, 1, ?SearchAVPs) of
+        % Found Code and value, but AVP is a group AVP, must unwrap to find the truth
+        {value, {Code, _}} when Type == {ok, gro} ->
+        % {value,{456,[{268,2001}]}}}
+        % {456,<<0,0,1,12,64,0,0,12,0,0,7,209>>}
+            io:format("Jackpot!!!~n"),
+            io:format("is_Grouped_AVP_match ~p~n", [is_Grouped_AVP_match(<<_Value:BodyLength>>, AVPR1)]),
+            case is_Grouped_AVP_match(<<_Value:BodyLength>>, AVPR1) of
+                {true, true, GroupAcc, AVPR2} ->
+                    AVPR = AVPR2,
+                    AVP = {Code, GroupAcc},
+                    Search = true;
+                {true, false, GroupAcc, AVPR2} ->
+                    AVPR = AVPR2,
+                    AVP = {Code, GroupAcc},
+                    Search = false;
+                false ->
+                    AVPR = AVPR1,
+                    AVP = {Code, Value},
+                    Search = false
+            end;                    
         % Found Code and value, set search to true
         {value, {Code, Value}} ->
+            AVPR = AVPR1,
+            AVP = {Code, Value},
             Search = true;
         % Found Code but value was not what we want, set search to false. Abandon search.
         {value, {Code, _WrongValue}} ->
+            AVPR = AVPR1,
+            AVP = {Code, Value},
             Search = false;
         % Not the code we're looking for so we'll carry on to the next avp, set search to true.
         _ ->
+            AVPR = AVPR1,
+            AVP = {Code, Value},
             Search = true
     end,
 
-    %% Optimise!
-    AVPR = #diameter_avp_new
-        {code = Code,    
-         v = Vendor,  
-         m = Mandatory,  
-         p = Protected,  
-         length = Length,
-         value = Value,
-         padding = Padding,
-         raw_data = AVPBin
-         },  
+    io:format("got AVP with value ~p~n", [AVP]),
+
+    %% Optimise
 
     D = DiaMessage,
     N = D#diameter_message.avps,
-    
-
     io:format("The d is ~p~n", [D]),
-
+    io:format("Super search is ~p~n", [Search]),
     is_AVP_match(Search, Rest2, [AVP|Acc], HeaderList, D#diameter_message{avps = [AVPR|N]});
 
 
@@ -263,9 +292,107 @@ is_AVP_match(_, _, _, _, _) ->
     false.
 
 
+%% Grouped
 % 456 MSCC
 % decode_packet(<<456:32, Flags:8, Length:24, Result_Code/bitstring, Rest/binary>>, Acc, HeaderList) ->
 %     decode_packet(Rest, [{456, Result_Code}|Acc], HeaderList).
+is_Grouped_AVP_match(Bin, AVPR) ->
+    Acc = [],
+    AVPRecordList = [],
+    is_Grouped_AVP_match(true, Bin, Acc, AVPR).
+
+is_Grouped_AVP_match(true, <<Code:32, Vendor:1, Mandatory:1, Protected:1, _Reserved:5, Length:24, Rest/binary>>, Acc, AVPR) ->
+    % io:format("~n"),
+    io:format("Length ~p~n", [Length]),
+
+    Padding = get_padding(Code, Length),
+    io:format("Padding is ~p~n", [Padding]),
+
+    BodyLength = ((Length * 8) - 64),
+    io:format("BodyLength is ~p~n", [BodyLength]),
+
+    AVPBin = <<_Value:BodyLength, _padding:Padding, Rest2/binary>> = <<Rest/binary>>,
+
+    io:format("IT Code ~p~n", [Code]),
+    io:format("IT ~p~n", [dorayaki_avp_mapper:num_to_type(Code)]),
+
+    %% Optimise!
+    case dorayaki_avp_mapper:num_to_type(Code) of 
+        {ok, arb} ->
+            Value = [binary_to_list(<<_Value:BodyLength>>)];
+        {ok, _Type} ->
+            Value = _Value
+    end,
+
+    AVP = {Code, Value},
+    io:format("got AVP with value ~p~n", [AVP]),
+
+    NewSubAVPR = #diameter_avp_new
+        {code = Code,    
+         v = Vendor,  
+         m = Mandatory,  
+         p = Protected,  
+         length = Length,
+         value = Value,
+         padding = Padding,
+         raw_data = AVPBin,
+         grouped = []
+         },  
+    
+    io:format("Code: ~p~n", [Code]),
+    GroupCode = AVPR#diameter_avp_new.code,
+    io:format("GroupCode: ~p~n", [GroupCode]),
+    io:format("Search: ~p~n", [lists:keysearch(GroupCode, 1, ?SearchAVPs)]),
+
+    {value, {GroupCode, SearchGroup}} = lists:keysearch(GroupCode, 1, ?SearchAVPs),
+    io:format("SearchGroup: ~p~n", [SearchGroup]),
+
+    case lists:keysearch(Code, 1, SearchGroup) of
+        % Found Code and value, set search to true
+        {value, {Code, Value}} ->
+            Search = true;
+        % Found Code but value was not what we want, set search to false. Abandon search.
+        {value, {Code, _WrongValue}} ->
+            Search = false;
+        % Not the code we're looking for so we'll carry on to the next avp, set search to true.
+        _ ->
+            Search = true
+    end,
+
+    %% Optimise!
+
+    N = AVPR#diameter_avp_new.grouped,
+    
+    io:format("The d is ~p~n", [N]),
+    io:format("The Search is ~p~n", [Search]),
+
+    is_Grouped_AVP_match(Search, Rest2, [AVP|Acc], AVPR#diameter_avp_new{grouped = [NewSubAVPR|N]});
+
+
+is_Grouped_AVP_match(true, <<>>, Acc, AVPR) ->
+    io:format("All done, check if all filters match~n"),
+    io:format("Acc is now ~p~n", [Acc]),
+    io:format("SearchAVPs is ~p~n", [?SearchAVPs]),
+    GroupCode = AVPR#diameter_avp_new.code,
+    io:format("GroupCode: ~p~n", [GroupCode]),
+    io:format("Search: ~p~n", [lists:keysearch(GroupCode, 1, ?SearchAVPs)]),
+
+    {value, {GroupCode, SearchGroup}} = lists:keysearch(GroupCode, 1, ?SearchAVPs),
+
+    Stat = lists:all(fun(X) -> lists:member(X, Acc) end, SearchGroup),
+    io:format("Sub Stat is ~p~n", [Stat]),
+    io:format("AVPR is ~p~n", [AVPR]),
+    {true, Stat, Acc, AVPR};
+
+is_Grouped_AVP_match(false, _, _Acc, _DiaMessage) ->
+    io:format("got false, abandon search~n"),
+    false;
+
+is_Grouped_AVP_match(_, _, _, _) ->
+    io:format("got weird something~n"),
+    false.
+
+% End Grouped
 
 %%%%%%%%%
 % EDITOR
@@ -341,7 +468,8 @@ packAVP([{Code, _Value}|AVPList], AVPBins, DiaMessage) ->
             AVPBin = [<<Code:32>>, Flags, <<Length:24>>, Value, Padding];
 
         {ok, gro} ->
-            Value = list_to_binary(_Value),
+            Value = Lz#diameter_avp_new.value,
+            % Value = list_to_binary(_Value),
             io:format("Value is ~p~n", [Value]),
 
             Length = (4+1+3+size(Value)),
