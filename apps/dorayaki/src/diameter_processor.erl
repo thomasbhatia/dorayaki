@@ -5,7 +5,7 @@
 
 -module(diameter_processor).
 
--define(TEST, false).
+% -define(TEST, test).
 
 -define(APPLICATION, dorayaki).
 
@@ -83,11 +83,11 @@
 -else.
 
 %% Here get SearchHeader and SearchAVPs from config_loader.
--define(SearchHeader, []).
--define(SearchAVPs, []).
+-define(SearchHeader, config_loader:get_env(search_header)).
+-define(SearchAVPs, config_loader:get_env(search_avps)).
 
 %% Here get ReplaceAVP from config_loader.
--define(ReplaceAVP, []).
+-define(ReplaceAVP, config_loader:get_env(replace_avp)).
 
 -endif.
 
@@ -291,11 +291,7 @@ is_AVP_match(_, _, _, _, _) ->
     io:format("got weird something~n"),
     false.
 
-
-%% Grouped
-% 456 MSCC
-% decode_packet(<<456:32, Flags:8, Length:24, Result_Code/bitstring, Rest/binary>>, Acc, HeaderList) ->
-%     decode_packet(Rest, [{456, Result_Code}|Acc], HeaderList).
+%%% Grouped AVP search
 is_Grouped_AVP_match(Bin, AVPR) ->
     Acc = [],
     AVPRecordList = [],
@@ -469,7 +465,6 @@ packAVP([{Code, _Value}|AVPList], AVPBins, DiaMessage) ->
 
         {ok, gro} ->
             Value = Lz#diameter_avp_new.value,
-            % Value = list_to_binary(_Value),
             io:format("Value is ~p~n", [Value]),
 
             Length = (4+1+3+size(Value)),

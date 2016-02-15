@@ -46,7 +46,7 @@ load_config() ->
 
 
 parse_config(Config_path) ->
-    io:format("ITs ~p~n", [Config_path]),
+    io:format("Config path: ~p~n", [Config_path]),
     case file:consult(Config_path) of 
         {ok, Config} ->
         
@@ -54,35 +54,41 @@ parse_config(Config_path) ->
             io:format("Reading configuration file...~n"),
 
             io:format("Config File: ~p~n", [Config]),
-
-            % parse_config(Config),
+            % Client config
             [{client, CLIENT_CONFIG}] = [L || {client, _}=L <- Config],
             io:format("Client config: ~p~n", [CLIENT_CONFIG]),
 
-            % parse_client_config(CLIENT_CONFIG),
-
             [{port, CLIENT_PORT}] = [L || {port, _}=L <- CLIENT_CONFIG],
-            % CLIENT_PORT = list_to_integer(CLIENT_PORT_),
             set_env(client_port, CLIENT_PORT),
             io:format("Client Port: ~p~n", [CLIENT_PORT]),
 
-            % _ = [L || _=L <- CLIENT_CONFIG],
-            % exit("Unknown client config."),
-
-
+            % Host config
             [{host, HOST_CONFIG}] = [L || {host, _}=L <- Config],
             io:format("Host config: ~p~n", [HOST_CONFIG]),
-
-            % parse_host_config(HOST_CONFIG),
 
             [{ip, HOST_IP}] = [L || {ip, _}=L <- HOST_CONFIG],
             set_env(host_ip, HOST_IP),
             io:format("Host IP: ~p~n", [HOST_IP]),
 
-            % [{_,HOST_PORT,_}] = [L || {host,_,port}=L <- Config],
             [{port, HOST_PORT}] = [L || {port, _}=L <- HOST_CONFIG],
             set_env(host_port, HOST_PORT),
             io:format("Host Port: ~p~n", [HOST_PORT]),
+
+            % Search config
+            [{search_header, SearchHeader}] = [L || {search_header, _}=L <- Config],
+            set_env(search_header, SearchHeader),
+            io:format("Search header: ~p~n", [SearchHeader]),
+
+            [{search_avps, SearchAVPs}] = [L || {search_avps, _}=L <- Config],
+            set_env(search_avps, SearchAVPs),
+            io:format("Search AVPs: ~p~n", [SearchAVPs]),
+
+            [{replace_avp, ReplaceAVP}] = [L || {replace_avp, _}=L <- Config],
+            set_env(replace_avp, ReplaceAVP),
+            io:format("Replace AVPs: ~p~n", [ReplaceAVP]),
+
+            % Unknown = [L || _=L <- Config],
+            % exit("Unknown client config: ~p~n", [Unknown]),
 
             io:format("Finished reading configuration file.~n"),
             io:format("#############################~n");
@@ -92,9 +98,8 @@ parse_config(Config_path) ->
             % {ok, Dir} = file:get_cwd(),
             % io:format("Dir: ~p~n", [Dir]),
             % io:format("Config file: ~p~n", [?CONFIG_FILE]),
-            io:format("Error: ~p~n", [Error]),
-            io:format("Why: ~p~n", [Why]),
-            exit("not found")
+            io:format("Error caused by: ~p~n", [Why]),
+            exit("Error reading file")
     end.
 
 % % Parse config
