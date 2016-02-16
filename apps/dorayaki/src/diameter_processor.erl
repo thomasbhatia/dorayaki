@@ -48,8 +48,6 @@
          grouped = []
          }).  
 
-
-
 %%====================================================================
 %% TEST API
 %%====================================================================
@@ -75,9 +73,7 @@
         192,64,0,0,12,0,0,7,8>>).
 
 -define(SearchHeader, [{commandcode, 271}]).
--define(SearchAVPs, [{?Auth_Session_State, 1}, {?Multiple_Services_Credit_Control, [{?Result_Code, 4012}]}]).
-% -define(SearchAVPs, [{?Result_Code, 2001}, {?Multiple_Services_Credit_Control, [{?Result_Code, 4012}]}]).
-% -define(SearchAVPs, [{?Result_Code, 2001}, {?Auth_Session_State, 1}, {?Host_IP_Address, 2}]).
+-define(SearchAVPs, [{?Result_Code, 2001}, {?Multiple_Services_Credit_Control, [{?Result_Code, 4012}]}]).
 -define(ReplaceAVP, [{?Result_Code, 4012}]).
 
 -else.
@@ -101,38 +97,39 @@
 process_packet(<<Bin/binary>>) ->
     % io:format("Bin is ~p~n", [<<Bin/binary>>]),
     % Check if Headers match search
+    lager:log(debug, "console", "process_packet 1. ~w", [<<Bin/binary>>]),
     process_packet(is_header_match(<<Bin/binary>>));
 
 % 2a. Header match
 process_packet({true, AVPBins, HeaderList, DiaMessage}) -> 
-    io:format("Headers match~n"),
+    lager:log(debug, "console", "Headers match, next check if AVPs match."),
     % Check if any AVPs match search
     Acc = [],
     process_packet(is_AVP_match(true, AVPBins, Acc, HeaderList, DiaMessage));
 
 % 2b. Header don't match
 process_packet({false, _, _, _}) -> 
-    io:format("header no match~n"),
+    lager:log(debug, "console", "Headers do not match, abandon search."),
     [];
 
 % 3a. Header, AVP match and accumulator
 process_packet({true, true, Acc, HeaderList, DiaMessage})->
     % Edit messages
-    io:format("next do replace here~n"),
+    lager:log(debug, "console", "Headers match, AVPs match. We'll run 'replace' next."),
     {MessageList, HeaderList} = editor(Acc, HeaderList),
     % Pack messages
     MessageBin = packer(MessageList, HeaderList, DiaMessage),
-    io:format("MessageBin~p~n", [MessageBin]),
+    lager:log(debug, "console", "AVPs replaced and this is final MessageBin ~w", [MessageBin]),
     MessageBin;
 
 % 3b. AVP value don't match
 process_packet({true, false, _Acc, _HeaderList, _DiaMessage}) ->
-    io:format("nnno match~n"),
+    lager:log(debug, "console", "AVPs match but their values do not, abandon search."),
     [];
 
 % 3c. AVP don't match
 process_packet(false) ->
-    io:format("no match, bye~n"),
+    lager:log(debug, "console", "AVPs do not match, abandon search."),
     [].
 
 
@@ -143,7 +140,6 @@ get_padding(Code, AVP_length) ->
     case lists:member(Code, ?AVP_PADDING) of
         true  -> 
             P = AVP_length rem 4,
-            % io:format("P is  ~w~n", [P]),
             case P > 0 of 
                 true ->
                     Pad = ((P - 4) * -1) * 8;
@@ -180,26 +176,26 @@ is_header_match(<<Version:8, Length:24, R:1, P:1, E:1, T:1, Reserved:4, Command:
     {lists:all(fun(X) -> lists:member(X, HeaderList) end, ?SearchHeader), Rest, HeaderList, DiaMessage};
 
 is_header_match(_) ->
-    io:format("No understand! ~n"),
+    lager:log(debug, "console", "We don't understand the Diameter Header we recieved."),
     [].
 
 %%%%%%%%
 % Check AVPs match
 %%%%%%%%
 is_AVP_match(true, <<Code:32, Vendor:1, Mandatory:1, Protected:1, _Reserved:5, Length:24, Rest/binary>>, Acc, HeaderList, DiaMessage) ->
-    % io:format("~n"),
-    io:format("Length ~p~n", [Length]),
+    lager:log(debug, "console", "Start matching AVP"),
+    lager:log(debug, "console", "AVP Code: ~w", [Code]),
+    lager:log(debug, "console", "AVP Value Type: ~w", [dorayaki_avp_mapper:num_to_type(Code)]),
+    lager:log(debug, "console", "AVP Length: ~w", [Length]),
+    lager:log(debug, "console", "Diameter message received: ~p", [DiaMessage]),
 
     Padding = get_padding(Code, Length),
-    io:format("Padding is ~p~n", [Padding]),
+    lager:log(debug, "console", "AVP Padding: ~w", [Padding]),
 
     BodyLength = ((Length * 8) - 64),
-    io:format("BodyLength is ~p~n", [BodyLength]),
+    lager:log(debug, "console", "AVP BodyLength: ~w", [BodyLength]),
 
     AVPBin = <<_Value:BodyLength, _padding:Padding, Rest2/binary>> = <<Rest/binary>>,
-
-    io:format("IT Code ~p~n", [Code]),
-    io:format("IT ~p~n", [dorayaki_avp_mapper:num_to_type(Code)]),
 
     %% Optimise!
     Type = dorayaki_avp_mapper:num_to_type(Code),
@@ -208,7 +204,6 @@ is_AVP_match(true, <<Code:32, Vendor:1, Mandatory:1, Protected:1, _Reserved:5, L
             Value = [binary_to_list(<<_Value:BodyLength>>)];
         {ok, gro} ->
             Value = <<_Value:BodyLength>>;
-            % is_Grouped_AVP_match(<<_Value:BodyLength>>),
         {ok, _Type} ->
             Value = _Value
     end,
@@ -224,16 +219,15 @@ is_AVP_match(true, <<Code:32, Vendor:1, Mandatory:1, Protected:1, _Reserved:5, L
      raw_data = [<<Code:32, Vendor:1, Mandatory:1, Protected:1, _Reserved:5, Length:24>>, <<_Value:BodyLength, 0:Padding>>]
      },  
 
-    io:format("GROUP key search~p~n", [lists:keysearch(Code, 1, ?SearchAVPs)]),
-    io:format("WHat is TYpe:~p~n", [Type]),
-    case lists:keysearch(Code, 1, ?SearchAVPs) of
+    % io:format("GROUP key search~p~n", [lists:keysearch(Code, 1, ?SearchAVPs)]),
+    KSAPR = lists:keysearch(Code, 1, ?SearchAVPs),
+    lager:log(debug, "console", "Key search within AVPs result: ~p", [KSAPR]),
+    case KSAPR of
         % Found Code and value, but AVP is a group AVP, must unwrap to find the truth
         {value, {Code, _}} when Type == {ok, gro} ->
-        % {value,{456,[{268,2001}]}}}
-        % {456,<<0,0,1,12,64,0,0,12,0,0,7,209>>}
-            io:format("Jackpot!!!~n"),
-            io:format("is_Grouped_AVP_match ~p~n", [is_Grouped_AVP_match(<<_Value:BodyLength>>, AVPR1)]),
-            case is_Grouped_AVP_match(<<_Value:BodyLength>>, AVPR1) of
+            GAPVM = is_Grouped_AVP_match(<<_Value:BodyLength>>, AVPR1),
+            lager:log(debug, "console", "Check if AVP is grouped and match: ~p", [GAPVM]),
+            case GAPVM of
                 {true, true, GroupAcc, AVPR2} ->
                     AVPR = AVPR2,
                     AVP = {Code, GroupAcc},
@@ -264,31 +258,30 @@ is_AVP_match(true, <<Code:32, Vendor:1, Mandatory:1, Protected:1, _Reserved:5, L
             Search = true
     end,
 
-    io:format("got AVP with value ~p~n", [AVP]),
-
-    %% Optimise
+    lager:log(debug, "console", "AVP record: ~p", [AVPR]),
+    lager:log(debug, "console", "AVP value: ~p", [AVP]),
 
     D = DiaMessage,
     N = D#diameter_message.avps,
-    io:format("The d is ~p~n", [D]),
-    io:format("Super search is ~p~n", [Search]),
+
     is_AVP_match(Search, Rest2, [AVP|Acc], HeaderList, D#diameter_message{avps = [AVPR|N]});
 
 
 is_AVP_match(true, <<>>, Acc, HeaderList, DiaMessage) ->
-    io:format("All done, check if all filters match~n"),
-    io:format("Acc is now ~p~n", [Acc]),
-    io:format("SearchAVPs is ~p~n", [?SearchAVPs]),
-    Stat = lists:all(fun(X) -> lists:member(X, Acc) end, ?SearchAVPs),
-    io:format("Stat is ~p~n", [Stat]),
-    {true, Stat, Acc, HeaderList, DiaMessage};
+    lager:log(debug, "console", "AVP search is done, next check if all filters match."),
+    lager:log(debug, "console", "Accumulator ~p", [Acc]),
+
+    AVP_filter_list_match = lists:all(fun(X) -> lists:member(X, Acc) end, ?SearchAVPs),
+    lager:log(debug, "console", "AVP filter list match: ~p", [AVP_filter_list_match]),
+
+    {true, AVP_filter_list_match, Acc, HeaderList, DiaMessage};
 
 is_AVP_match(false, _, _Acc, _HeaderList, _DiaMessage) ->
-    io:format("got false, abandon search~n"),
+    lager:log(debug, "console", "AVPs do not match"),
     false;
 
 is_AVP_match(_, _, _, _, _) ->
-    io:format("got weird something~n"),
+    lager:log(error, "console", "AVP cycle went wrong, value unknown"),
     false.
 
 %%% Grouped AVP search
@@ -298,22 +291,22 @@ is_Grouped_AVP_match(Bin, AVPR) ->
     is_Grouped_AVP_match(true, Bin, Acc, AVPR).
 
 is_Grouped_AVP_match(true, <<Code:32, Vendor:1, Mandatory:1, Protected:1, _Reserved:5, Length:24, Rest/binary>>, Acc, AVPR) ->
-    % io:format("~n"),
-    io:format("Length ~p~n", [Length]),
+    lager:log(debug, "console", "Start matching within Group AVP"),
+    lager:log(debug, "console", "AVP within group, Code: ~p", [Code]),
+    lager:log(debug, "console", "AVP within group, Length: ~p", [Length]),
+    lager:log(debug, "console", "AVP record received: ~p", [AVPR]),
 
     Padding = get_padding(Code, Length),
-    io:format("Padding is ~p~n", [Padding]),
+    lager:log(debug, "console", "AVP within group, Padding: ~p", [Padding]),
 
     BodyLength = ((Length * 8) - 64),
-    io:format("BodyLength is ~p~n", [BodyLength]),
+    lager:log(debug, "console", "AVP within group, BodyLength: ~p", [BodyLength]),
 
     AVPBin = <<_Value:BodyLength, _padding:Padding, Rest2/binary>> = <<Rest/binary>>,
 
-    io:format("IT Code ~p~n", [Code]),
-    io:format("IT ~p~n", [dorayaki_avp_mapper:num_to_type(Code)]),
-
     %% Optimise!
-    case dorayaki_avp_mapper:num_to_type(Code) of 
+    Type = dorayaki_avp_mapper:num_to_type(Code),
+    case Type of 
         {ok, arb} ->
             Value = [binary_to_list(<<_Value:BodyLength>>)];
         {ok, _Type} ->
@@ -321,7 +314,6 @@ is_Grouped_AVP_match(true, <<Code:32, Vendor:1, Mandatory:1, Protected:1, _Reser
     end,
 
     AVP = {Code, Value},
-    io:format("got AVP with value ~p~n", [AVP]),
 
     NewSubAVPR = #diameter_avp_new
         {code = Code,    
@@ -335,13 +327,14 @@ is_Grouped_AVP_match(true, <<Code:32, Vendor:1, Mandatory:1, Protected:1, _Reser
          grouped = []
          },  
     
-    io:format("Code: ~p~n", [Code]),
+    lager:log(debug, "console", "Grouped AVP record: ~p", [NewSubAVPR]),
+    lager:log(debug, "console", "Grouped AVP value: ~p", [AVP]),
+
     GroupCode = AVPR#diameter_avp_new.code,
-    io:format("GroupCode: ~p~n", [GroupCode]),
-    io:format("Search: ~p~n", [lists:keysearch(GroupCode, 1, ?SearchAVPs)]),
+    lager:log(debug, "console", "Grouped code: ~p", [GroupCode]),
 
     {value, {GroupCode, SearchGroup}} = lists:keysearch(GroupCode, 1, ?SearchAVPs),
-    io:format("SearchGroup: ~p~n", [SearchGroup]),
+    lager:log(debug, "console", "SearchGroup AVP value: ~p", [SearchGroup]),
 
     case lists:keysearch(Code, 1, SearchGroup) of
         % Found Code and value, set search to true
@@ -355,37 +348,29 @@ is_Grouped_AVP_match(true, <<Code:32, Vendor:1, Mandatory:1, Protected:1, _Reser
             Search = true
     end,
 
-    %% Optimise!
-
     N = AVPR#diameter_avp_new.grouped,
-    
-    io:format("The d is ~p~n", [N]),
-    io:format("The Search is ~p~n", [Search]),
 
     is_Grouped_AVP_match(Search, Rest2, [AVP|Acc], AVPR#diameter_avp_new{grouped = [NewSubAVPR|N]});
 
 
 is_Grouped_AVP_match(true, <<>>, Acc, AVPR) ->
-    io:format("All done, check if all filters match~n"),
-    io:format("Acc is now ~p~n", [Acc]),
-    io:format("SearchAVPs is ~p~n", [?SearchAVPs]),
+    lager:log(debug, "console", "Grouped AVP search is done, next check if all filters match."),
+    lager:log(debug, "console", "Grouped Accumulator ~p", [Acc]),
+
     GroupCode = AVPR#diameter_avp_new.code,
-    io:format("GroupCode: ~p~n", [GroupCode]),
-    io:format("Search: ~p~n", [lists:keysearch(GroupCode, 1, ?SearchAVPs)]),
-
     {value, {GroupCode, SearchGroup}} = lists:keysearch(GroupCode, 1, ?SearchAVPs),
+    Grouped_AVP_filter_list_match = lists:all(fun(X) -> lists:member(X, Acc) end, SearchGroup),
 
-    Stat = lists:all(fun(X) -> lists:member(X, Acc) end, SearchGroup),
-    io:format("Sub Stat is ~p~n", [Stat]),
-    io:format("AVPR is ~p~n", [AVPR]),
-    {true, Stat, Acc, AVPR};
+    lager:log(debug, "console", "AVP filter list match: ~p", [Grouped_AVP_filter_list_match]),
+
+    {true, Grouped_AVP_filter_list_match, Acc, AVPR};
 
 is_Grouped_AVP_match(false, _, _Acc, _DiaMessage) ->
-    io:format("got false, abandon search~n"),
+    lager:log(debug, "console", "AVPs do not match"),
     false;
 
 is_Grouped_AVP_match(_, _, _, _) ->
-    io:format("got weird something~n"),
+lager:log(error, "console", "Grouped AVP cycle went wrong, value unknown"),
     false.
 
 % End Grouped
@@ -394,29 +379,22 @@ is_Grouped_AVP_match(_, _, _, _) ->
 % EDITOR
 %%%%%%%%%
 editor(Acc, HeaderList) ->
-    io:format("True, we'll replace AVP values here~p~n", [Acc]),
+    lager:log(debug, "console", "Editor received accumulator ~w", [Acc]),
     [{Code, Value}| Rest ] = ?ReplaceAVP,
-    io:format("H is ~p~n", [{Code, Value}]),
+    lager:log(debug, "console", "Value to be replaced: ~p", [{Code, Value}]),
+
     MessageList = lists:keyreplace(Code, 1, Acc, {Code, Value}),
-    io:format("HeaderList is now ~p~n", [HeaderList]),
-    io:format("Message is ~p~n", [MessageList]),
+    lager:log(debug, "console", "Edited Message is now: ~p", [MessageList]),
     {MessageList, HeaderList}.
 
 %%%%%%%%%
 % PACKER
 %%%%%%%%%
 packer(AVPList, HeaderList, DiaMessage) ->
-    io:format("HeaderList is ~p~n", [HeaderList]),
+    lager:log(debug, "console", "Packer received AVPList ~w", [AVPList]),
 
     AVPBins = iolist_to_binary(packAVP(AVPList, DiaMessage)),
-    % io:format("Packed AVPBin is ~p~n", [AVPBin]),
-
     HeaderBin = packHeader(HeaderList),
-    % io:format("HeaderBin is ~p~n", [HeaderBin]),
-    io:format("Actual size of Header is ~p~n", [size(HeaderBin)]),
-
-    io:format("Actual size of AVPBinis ~p~n", [size(AVPBins)]),
-
     iolist_to_binary([HeaderBin, AVPBins]).
 
 packHeader([{version, Version}, {length, Length}, {request, R}, 
@@ -429,35 +407,33 @@ packAVP(AVPList, DiaMessage) ->
     packAVP(AVPList, [], DiaMessage).
 
 packAVP([{Code, _Value}|AVPList], AVPBins, DiaMessage) ->
-    io:format("Code is ~p~n", [Code]),
-    io:format("Value is ~p~n", [_Value]),
-    % io:format("AVPBins is ~p~n", [AVPBins]),
+    lager:log(debug, "console", "PackAVP recieved code ~w", [Code]),
+    lager:log(debug, "console", "PackAVP recieved value ~w", [_Value]),
 
     Dz = DiaMessage#diameter_message.avps,
     Lz = lists:keyfind(Code, 2, Dz),
-    io:format("L is now now now ~p~n", [Lz]),
 
     Vz = Lz#diameter_avp_new.v,
     Mz = Lz#diameter_avp_new.m,
     Pz = Lz#diameter_avp_new.p,
 
-    io:format("V is now ~p~n", [Vz]),
-    io:format("M is now ~p~n", [Mz]),
-    io:format("P is now ~p~n", [Pz]),
+    lager:log(debug, "console", "AVP V flag ~w", [Vz]),
+    lager:log(debug, "console", "AVP V flag ~w", [Mz]),
+    lager:log(debug, "console", "AVP V flag ~w", [Pz]),
 
     Flags = <<Vz:1,Mz:1,Pz:1,0:1,0:1,0:1,0:1,0:1>>,
-    io:format("Flags is ~p~n", [Flags]),
+    lager:log(debug, "console", "AVP full flag ~w", [Flags]),
 
     case dorayaki_avp_mapper:num_to_type(Code) of 
         {ok, arb} ->            
             Value = list_to_binary(_Value),
-            io:format("Value is ~p~n", [Value]),
+            lager:log(debug, "console", "AVP value: ~w", [Value]),
 
             Length = (4+1+3+size(Value)),
-            io:format("Length is ~p~n", [Length]),
+            lager:log(debug, "console", "AVP length: ~w", [Length]),
 
             Pad = get_padding(Code, Length),
-            io:format("Pad is ~p~n", [Pad]),
+            lager:log(debug, "console", "AVP Pad ~w", [Pad]),
 
             Padding = <<0:Pad>>,
             
@@ -465,40 +441,30 @@ packAVP([{Code, _Value}|AVPList], AVPBins, DiaMessage) ->
 
         {ok, gro} ->
             Value = Lz#diameter_avp_new.value,
-            io:format("Value is ~p~n", [Value]),
+            lager:log(debug, "console", "AVP value: ~w", [Value]),
 
             Length = (4+1+3+size(Value)),
-            io:format("Length is ~p~n", [Length]),
+            lager:log(debug, "console", "AVP length: ~w", [Length]),
 
             Pad = get_padding(Code, Length),
-            io:format("Pad is ~p~n", [Pad]),
+            lager:log(debug, "console", "AVP Pad ~w", [Pad]),
 
             Padding = <<0:Pad>>,
             
             AVPBin = [<<Code:32>>, Flags, <<Length:24>>, Value, Padding];
 
-        {ok, Size} ->
+        {ok, Length} ->
             Value = _Value,
-            io:format("Last Size is ~p~n", [Size]),
-
-            Length = Size,
-            io:format("Length is ~p~n", [Length]),
+            lager:log(debug, "console", "AVP value: ~w", [Value]),
+            lager:log(debug, "console", "AVP length ~w", [Length]),
 
             AVPBin = [<<Code:32>>, Flags, <<Length:24>>, <<Value:32>>]
     end,
-    io:format("Pile is ~p~n", [AVPBin]),
-    io:format("~n"),
+    lager:log(debug, "console", "AVP Bin is now wrapped: ~w", [AVPBin]),
     packAVP(AVPList, [AVPBin|AVPBins], DiaMessage);
     
 packAVP([], AVPBins, DiaMessage) ->
     AVPBins.
-
-
-%     decode_avps(Rest2, SearchAVPs, [AVPBin|OutBinList], MatchedAVPList);
-
-
-% % append_attr(Attr, State) ->
-% % State#decoder_state{attrs = [Attr | State#decoder_state.attrs]}.
 
 
 

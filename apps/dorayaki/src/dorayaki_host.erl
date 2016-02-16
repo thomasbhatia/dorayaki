@@ -29,18 +29,18 @@ init(Client) ->
  
  
 handle_cast(setup_socket, #state{client=Client}=State) ->
-    io:format("########################################~n"),
-    io:format("Connecting to Host at IP ~p on port ~p..... ~n", [?HOST_IP, ?HOST_PORT]), 
+lager:log(info, "console", "#############################"),
+    lager:log(info, "console", "Connecting to Host at IP ~p on port ~p..... ", [?HOST_IP, ?HOST_PORT]),
 
     inet:setopts(Client, [{active, once}]),
     case gen_tcp:connect(?HOST_IP, ?HOST_PORT, [binary, {active, once}, {packet, 0}]) of
         {ok, Server} ->
-            io:format("Now connected to OCS ~n"),
-            io:format("########################################~n"),
+            lager:log(info, "console", "Now connected to OCS"),
+            lager:log(info, "console", "#############################"),
             {noreply, #state{client=Client, server=Server}};
         Error ->
-            io:format("Error connecting to OCS ~n"),
-            {stop, io_lib:format("Relay exception: ~p~n", [Error]), State}
+            lager:log(error, "console", "Error connecting to OCS"),
+            {stop, lager:log(info, "console", "Relay exception: ~p", [Error]), State}
     end.
  
 % handle connection termination
@@ -55,20 +55,19 @@ handle_info({tcp_closed, Socket}, #state{client=Client, server=Server}=State) ->
   
 % From Client (GGSN)
 handle_info({tcp, Client, Data}, #state{client=Client, server=Server}=State) ->
+    lager:log(debug, "console", "Received data from GGSN: ~w", [Data]),
     gen_tcp:send(Server, Data),
             inet:setopts(Client, [{active, once}]),
             {noreply, State};
 
 % From Server (OCS)
 handle_info({tcp, Server, Data}, #state{client=Client, server=Server}=State) ->
-    io:format("IN ~w~n", [Data]),
+    lager:log(debug, "console", "Received data from OCS: ~w", [Data]),
     case diameter_processor:process_packet(Data) of 
         [] -> 
             OutData = Data;
 
         Bin ->
-            % io:format("H~p~n", [H]),
-            io:format("T~p~n", [Bin]),
             OutData = Bin
     end,
 
