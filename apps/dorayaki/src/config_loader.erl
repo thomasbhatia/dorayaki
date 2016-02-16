@@ -9,6 +9,8 @@
 
 -define(APPLICATION, dorayaki).
 
+-define(LOG_LEVEL, config_loader:get_env(log_level)).
+
 -export([get_env/1]).
 
 get_env(Key) ->
@@ -47,9 +49,11 @@ load_config() ->
 
 parse_config(Config_path) ->
     io:format("Config path: ~p~n", [Config_path]),
+    lager:info("~s is ~s!", [lager, cool]),
+    lager:warning("but pay ~s!", [attention]),
+    lager:error("there is always some ~s", [error]),
     case file:consult(Config_path) of 
         {ok, Config} ->
-        
             io:format("#############################~n"),
             io:format("Reading configuration file...~n"),
 
@@ -87,13 +91,18 @@ parse_config(Config_path) ->
             set_env(replace_avp, ReplaceAVP),
             io:format("Replace AVPs: ~p~n", [ReplaceAVP]),
 
+            % Log level
+            [{log_level, Log_level}] = [L || {replace_avp, _}=L <- Config],
+            set_env(log_level, Log_level),
+            io:format("log_level: ~p~n", [Log_level]),
+
             % Unknown = [L || _=L <- Config],
             % exit("Unknown client config: ~p~n", [Unknown]),
 
             io:format("Finished reading configuration file.~n"),
             io:format("#############################~n");
 
-        {Error, Why} -> 
+        {error, Why} -> 
             % io:format("Couldn't find config file")
             % {ok, Dir} = file:get_cwd(),
             % io:format("Dir: ~p~n", [Dir]),

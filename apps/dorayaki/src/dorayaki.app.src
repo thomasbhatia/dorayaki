@@ -1,11 +1,12 @@
 {application, 'dorayaki',
- [{description, "An OTP application"},
+ [{description, "Dorayaki is a Diameter stream editor."},
   {vsn, "0.1.0"},
   {registered, []},
   {mod, {'dorayaki_app', []}},
   {applications,
    [kernel,
-    stdlib
+    stdlib,
+    lager
    ]},
   {env,[]},
   {modules, []},
