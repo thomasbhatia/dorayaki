@@ -14,7 +14,6 @@
 -define(Acct_Interim_Interval,				85).
 
 -define(Host_IP_Address,					257).
-
 -define(Auth_Application_Id,				258).
 -define(Acct_Application_Id,				259).
 
@@ -92,8 +91,5 @@
 -define(Enumerated,	12).
 -define(DiamIdent,	arb).
 -define(DiamURI,	arb).
-% -define(UTF8String,	arb).
-% -define(UTF8String,	arb).
-% -define(UTF8String,	arb).
 
 

@@ -8,7 +8,6 @@
 
 
 num_to_name(Num) ->
-io:format("Got Num: ~w~n", [Num]), 
 AVP_list = [
 {85, 	'Acct-Interim-Interval'},
 {483, 	'Accounting-Realtime-Required'},
@@ -75,7 +74,6 @@ AVP_list = [
 
 
 name_to_num(Name) ->
-io:format("Got Name: ~w~n", [Name]),
 % Define AVP and Message types
 AVP_list = [
 {'Acct-Interim-Interval',               85},
@@ -143,7 +141,6 @@ AVP_list = [
 	V.
 
 num_to_type(Num) ->
-io:format("Got Num: ~w~n", [Num]),
 AVP_TYPE = [
 {1, ?UTF8String},
 {3, ?Grouped},
@@ -199,5 +196,4 @@ AVP_TYPE = [
 	
 	D = dict:from_list(AVP_TYPE),
 	V = dict:find(Num, D),
-	io:format("V is ~p~n", [V]),
 	V.
