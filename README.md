@@ -1,3 +1,6 @@
+
+![dorayaki](https://cloud.githubusercontent.com/assets/1307449/13060300/4be43692-d428-11e5-975f-3908a865d488.png)
+
 dorayaki
 =====
 
