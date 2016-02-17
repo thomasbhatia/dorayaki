@@ -1,7 +1,7 @@
 
 ![dorayaki](https://cloud.githubusercontent.com/assets/1307449/13060300/4be43692-d428-11e5-975f-3908a865d488.png)
 
-dorayaki
+dorayaki [![TravisCI build](https://travis-ci.org/thomasbhatia/dorayaki.svg?branch=master)](https://travis-ci.org/thomasbhatia/dorayaki)
 =====
 
 An OTP application
