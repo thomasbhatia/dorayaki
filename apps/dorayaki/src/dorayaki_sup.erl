@@ -20,18 +20,17 @@
 %%====================================================================
 
 start_link() ->
-    CLIENT_PORT = get_client_port(),
-    io:format("CLIENT_PORT at start_link ~p~n", [CLIENT_PORT]),
+    config_loader:load_config(),
+    {ok, CLIENT_PORT} = application:get_env(dorayaki, client_port),
+
+    lager:log(debug, "console", "CLIENT_PORT at start_link ~p", [CLIENT_PORT]),
     supervisor:start_link({local, ?SERVER}, ?MODULE, [CLIENT_PORT]).
 
 %%====================================================================
 %% Supervisor callbacks
 %%====================================================================
 
-%% Child :: {Id,StartFunc,Restart,Shutdown,Type,Modules}
-
 init([CLIENT_PORT]) ->
-    % {ok, { {one_for_all, 0, 1}, []} }.
     RestartStrategy = one_for_one,
     MaxRestarts = 3,
     MaxSecondsBetweenRestarts = 3600,
@@ -50,12 +49,3 @@ init([CLIENT_PORT]) ->
 %%====================================================================
 %% Internal functions
 %%====================================================================
-
-get_client_port() ->
-    P = config_loader:get_env(client_port),
-    case P of 
-        {ok, Port} -> Port;
-    Port -> 
-        io:format("P ~p~n", [Port]),
-        Port
-    end.

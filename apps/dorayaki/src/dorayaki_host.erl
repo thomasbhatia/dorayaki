@@ -13,11 +13,10 @@
  
 -define(SERVER, ?MODULE).
 
--include("diameter.hrl").
+-define(TIMEOUT, 0).
 
-%find response3 sitting in State#state.resp
 -record(state, {client, server}).
- 
+
 start(Client) ->
     {ok, Pid} = gen_server:start(?MODULE, Client, []),
     gen_tcp:controlling_process(Client, Pid),
@@ -29,18 +28,18 @@ init(Client) ->
  
  
 handle_cast(setup_socket, #state{client=Client}=State) ->
-    io:format("########################################~n"),
-    io:format("Connecting to Host at IP ~p on port ~p..... ~n", [?HOST_IP, ?HOST_PORT]), 
+    lager:log(info, "console", "#############################"),
+    lager:log(info, "console", "Connecting to Host at IP ~p on port ~p..... ", [?HOST_IP, ?HOST_PORT]),
 
     inet:setopts(Client, [{active, once}]),
     case gen_tcp:connect(?HOST_IP, ?HOST_PORT, [binary, {active, once}, {packet, 0}]) of
         {ok, Server} ->
-            io:format("Now connected to OCS ~n"),
-            io:format("########################################~n"),
+            lager:log(info, "console", "Now connected to OCS"),
+            lager:log(info, "console", "#############################"),
             {noreply, #state{client=Client, server=Server}};
         Error ->
-            io:format("Error connecting to OCS ~n"),
-            {stop, io_lib:format("Relay exception: ~p~n", [Error]), State}
+            lager:log(error, "console", "Error connecting to OCS"),
+            {stop, lager:log(info, "console", "Relay exception: ~p", [Error]), State}
     end.
  
 % handle connection termination
@@ -55,23 +54,82 @@ handle_info({tcp_closed, Socket}, #state{client=Client, server=Server}=State) ->
   
 % From Client (GGSN)
 handle_info({tcp, Client, Data}, #state{client=Client, server=Server}=State) ->
+    lager:log(debug, "console", "Received data from GGSN: ~w", [Data]),
     gen_tcp:send(Server, Data),
-    % io:format("this is data from GGSN: ~p~n", [Data]), 
-    inet:setopts(Client, [{active, once}]),
-    {noreply, State};
+            inet:setopts(Client, [{active, once}]),
+            {noreply, State};
 
 % From Server (OCS)
-handle_info({tcp, Server, Data}, #state{client=Client, server=Server}=State) ->
-    % preprocess_data(Data, {Client, Server, State}).
-    diameter_processor:diameter_process(Data, {Client, Server, State}).
+handle_info({tcp, Server, Bin}, #state{client=Client, server=Server}=State) ->
+    lager:log(debug, "console", "Client is: ~w", [Client]),
+    lager:log(debug, "console", "Server is: ~w", [Server]),
+    lager:log(debug, "console", "State is: ~w", [State]),
+    lager:log(debug, "console", "Received data from OCS: ~w", [Bin]),
+    check_data_integrity(Bin, State).
 
 % Doesn't do anything
-handle_call(_,_,_) -> {ok, undefined}.
-
+handle_call(_,_,_) -> 
+    {ok, undefined}.
 
 terminate(_Reason, _State) ->
     ok.
  
 code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
+
+%%====================================================================
+%% Internal functions
+%%====================================================================
+check_data_integrity(Bin = <<_Version:8, Length:24, _Payload/binary>>, State) when Length =:= size(Bin) -> 
+    lager:log(debug, "console", "CHECK 1."),
+    lager:log(debug, "console", "Size of bin: ~w", [size(Bin)]),
+    lager:log(debug, "console", "Length: ~w", [Length]),
+    lager:log(debug, "console", "Bin is: ~w", [Bin]),
+    diameter_processor:process_packet(Bin, State);
+
+check_data_integrity(Bin = <<_Version:8, Length:24, _Payload/binary>>, State) when Length < size(Bin) -> 
+    lager:log(debug, "console", "CHECK 2."),
+    lager:log(debug, "console", "Size of bin: ~w", [size(Bin)]),
+    lager:log(debug, "console", "Length: ~w", [Length]),
+    Length_bit = Length*8,
+    lager:log(debug, "console", "Length_bit is: ~w", [Length_bit]),
+    <<Bin2:Length_bit, Rest/binary>> = Bin, 
+    Bin3 = <<Bin2:Length_bit>>,
+    Bin4 = <<Rest/binary>>,
+    lager:log(debug, "console", "Bin3 is: ~w", [Bin3]),
+    lager:log(debug, "console", "Size of Rest: ~w", [Bin4]),
+    check_data_integrity(Bin3, State),
+    check_data_integrity(Bin4, State);
+
+check_data_integrity(Bin = <<_Version:8, Length:24, _Payload/binary>>, State) when Length > size(Bin) -> 
+    io:format("3. ~n"),
+    io:format("Size of bin ~p~n", [size(Bin)]),
+    io:format("Length ~p~n", [Length]),
+    io:format("Bin ~p~n", [Bin]),
+    case gen_tcp:recv(State#state.server, 0, ?TIMEOUT) of
+        {ok, NextBinList} ->   
+            io:format("got more data from sock~w~n", [NextBinList]),
+            NextBin = list_to_binary(NextBinList),
+            NewBin = <<Bin/binary, NextBin/binary>>,
+            check_data_integrity(NewBin, State);
+        {error, timeout} ->
+            io:format("got timeout~n"),
+            Bin;
+        {error, Reason} ->
+            io:format("Errrrrooooo!! ~p~n", [Reason]),
+            Bin
+    end;
+    
+
+check_data_integrity(Bin, State) -> 
+    lager:log(debug, "console", "CHECK 4."),
+    lager:log(debug, "console", "Bin: ~w", [Bin]),
+    lager:log(debug, "console", "Size of bin: ~w", [size(<<Bin>>)]),
+
+    %% discard fragment
+    inet:setopts(State#state.server, [{active, once}]),
+    {noreply, State}.
+
+
+
 

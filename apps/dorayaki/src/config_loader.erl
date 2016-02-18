@@ -9,18 +9,11 @@
 
 -define(APPLICATION, dorayaki).
 
+-export([load_config/0]).
 -export([get_env/1]).
 
 get_env(Key) ->
-	case application:get_env(?APPLICATION, Key) of   
-		{ok, Value} -> 
-			io:format("found ~p~n", [Value]);
-			% Value;
-		_ ->
-			load_config(),
-			Value = application:get_env(?APPLICATION, Key),
-			get_env(Key)
-	end,
+    {ok, Value} = application:get_env(?APPLICATION, Key),
 	Value.
 
 %%====================================================================
@@ -46,88 +39,59 @@ load_config() ->
 
 
 parse_config(Config_path) ->
-    io:format("ITs ~p~n", [Config_path]),
+    lager:log(debug, "console", "there is always some ~s", [doioio]),
+
     case file:consult(Config_path) of 
         {ok, Config} ->
-        
-            io:format("#############################~n"),
-            io:format("Reading configuration file...~n"),
+            lager:log(info, "console", "#############################"),
+            lager:log(info, "console", "Reading configuration file..."),
+            lager:log(info, "console", "Config File: ~p", [Config]),
 
-            io:format("Config File: ~p~n", [Config]),
+            % Client config
+            [{client, Client_config}] = [L || {client, _}=L <- Config],
+            lager:log(info, "console", "Client config: ~p", [Client_config]),
 
-            % parse_config(Config),
-            [{client, CLIENT_CONFIG}] = [L || {client, _}=L <- Config],
-            io:format("Client config: ~p~n", [CLIENT_CONFIG]),
+            [{port, Client_port}] = [L || {port, _}=L <- Client_config],
+            set_env(client_port, Client_port),
+            lager:log(info, "console", "Client Port: ~p", [Client_port]),
 
-            % parse_client_config(CLIENT_CONFIG),
+            % Host config
+            [{host, Host_config}] = [L || {host, _}=L <- Config],
+            lager:log(info, "console", "Host config: ~p", [Host_config]),
 
-            [{port, CLIENT_PORT}] = [L || {port, _}=L <- CLIENT_CONFIG],
-            % CLIENT_PORT = list_to_integer(CLIENT_PORT_),
-            set_env(client_port, CLIENT_PORT),
-            io:format("Client Port: ~p~n", [CLIENT_PORT]),
+            [{ip, Host_IP}] = [L || {ip, _}=L <- Host_config],
+            set_env(host_ip, Host_IP),
+            lager:log(info, "console", "Host IP: ~p", [Host_IP]),
 
-            % _ = [L || _=L <- CLIENT_CONFIG],
-            % exit("Unknown client config."),
+            [{port, Host_port}] = [L || {port, _}=L <- Host_config],
+            set_env(host_port, Host_port),
+            lager:log(info, "console", "Host Port: ~p", [Host_port]),
 
+            % Search config
+            [{search_header, Search_header}] = [L || {search_header, _}=L <- Config],
+            set_env(search_header, Search_header),
+            lager:log(info, "console", "Search header: ~p", [Search_header]),
 
-            [{host, HOST_CONFIG}] = [L || {host, _}=L <- Config],
-            io:format("Host config: ~p~n", [HOST_CONFIG]),
+            [{search_avps, Search_AVPs}] = [L || {search_avps, _}=L <- Config],
+            set_env(search_avps, Search_AVPs),
+            lager:log(info, "console", "Search AVPs: ~p", [Search_AVPs]),
 
-            % parse_host_config(HOST_CONFIG),
+            [{replace_avp, Replace_AVP}] = [L || {replace_avp, _}=L <- Config],
+            set_env(replace_avp, Replace_AVP),
+            lager:log(info, "console", "Replace AVP: ~p", [Replace_AVP]),
 
-            [{ip, HOST_IP}] = [L || {ip, _}=L <- HOST_CONFIG],
-            set_env(host_ip, HOST_IP),
-            io:format("Host IP: ~p~n", [HOST_IP]),
+            % Log level
+            [{log_level, Log_level}] = [L || {log_level, _}=L <- Config],
+            set_env(log_level, Log_level),
+            lager:log(info, "console", "log_level: ~p", [Log_level]),
 
-            % [{_,HOST_PORT,_}] = [L || {host,_,port}=L <- Config],
-            [{port, HOST_PORT}] = [L || {port, _}=L <- HOST_CONFIG],
-            set_env(host_port, HOST_PORT),
-            io:format("Host Port: ~p~n", [HOST_PORT]),
+            lager:set_loglevel(lager_console_backend, Log_level),
+            lager:set_loglevel(lager_file_backend, "console.log", Log_level),
 
-            io:format("Finished reading configuration file.~n"),
-            io:format("#############################~n");
+            lager:log(info, "console", "Finished reading configuration file."),
+            lager:log(info, "console", "#############################");
 
-        {Error, Why} -> 
-            % io:format("Couldn't find config file")
-            % {ok, Dir} = file:get_cwd(),
-            % io:format("Dir: ~p~n", [Dir]),
-            % io:format("Config file: ~p~n", [?CONFIG_FILE]),
-            io:format("Error: ~p~n", [Error]),
-            io:format("Why: ~p~n", [Why]),
-            exit("not found")
+        {error, Why} -> 
+            lager:log(error, "console", "Error caused by: ", [Why]),
+            exit("Error reading file")
     end.
-
-% % Parse config
-% parse_config([]) ->
-%     ParsedList = [],
-%     parse_config(Config, ParsedList, []).
-
-
-% parse_config({client, CLIENT_CONFIG}) ->
-%     parse_client_config([{client, CLIENT_CONFIG}]);
-
-% parse_config([{host, HOST_CONFIG}]) ->
-%     parse_host_config([{host, HOST_CONFIG}]);
-
-% parse_config(_) ->
-%     exit("Error reading config file").
-
-% % Parse client config
-% parse_client_config([{port, CLIENT_PORT}]) ->
-%     set_env(client_port, CLIENT_PORT),
-%     io:format("Client Port: ~p~n", [CLIENT_PORT]);
-
-% parse_client_config(_) ->
-%     exit("Unknown client config.").
-
-% % Parse host config
-% parse_host_config([{ip, HOST_IP}]) ->
-%     set_env(host_ip, HOST_IP),
-%     io:format("Host IP: ~p~n", [HOST_IP]);
-
-% parse_host_config([{port, HOST_PORT}]) ->
-%     set_env(host_ip, HOST_PORT),
-%     io:format("Host IP: ~p~n", [HOST_PORT]);
-
-% parse_host_config(_) ->
-%     exit("Unknown host config").
