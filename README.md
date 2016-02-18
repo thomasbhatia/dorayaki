@@ -37,6 +37,10 @@ Currently only edits to CCA or 'answers' is supported.
 ![after](https://cloud.githubusercontent.com/assets/1307449/13112863/88fc9134-d584-11e5-8833-f7aca8e087a1.png)
 
 
+Note
+----
+Dorayaki is not a Relay Agent and does not conform to RFC 6733 sec. 2.8.1. Dorayaki only modifies Diameter messages without being an active agent. I.e Diameter connections are still setup between your Diameter Client and the Diameter server. 
+
 
 Build
 -----
@@ -82,6 +86,13 @@ Example config file
     % Options available are 'info' and 'debug. 
     % Debug level is very verbose, do not enable on live systems.
     {log_level, debug}.
+
+Tips & Tricks
+-------------
+
+Reload config:
+    config_loader:load_config().
+    
 
 Copyright
 ---------
