@@ -9,7 +9,7 @@
 
 -define(APPLICATION, dorayaki).
 
--export([process_packet/1]).
+-export([process_packet/2]).
 
 -include("lib.hrl").
 
@@ -47,6 +47,9 @@
          raw_data,
          grouped = []
          }).  
+
+
+-record(state, {client, server}).
 
 %%====================================================================
 %% TEST API
@@ -92,6 +95,24 @@
 %%====================================================================
 
 -define(Replace, [?ReplaceAVP]).
+
+% 0. Preprocess
+process_packet(Data, State) ->
+    lager:log(debug, "console", "CHECK 5."),
+    case process_packet(Data) of 
+        [] -> 
+            lager:log(debug, "console", "CHECK 6."),
+            OutData = Data;
+
+        Bin ->
+            lager:log(debug, "console", "CHECK 7."),
+            OutData = Bin
+    end,
+
+    gen_tcp:send(State#state.client, OutData),
+    inet:setopts(State#state.server, [{active, once}]),
+    {noreply, State}.
+
 
 % 1. Check Diameter Headers 
 process_packet(<<Bin/binary>>) ->
