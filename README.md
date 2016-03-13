@@ -58,7 +58,11 @@ Test
 ------------
 Eunit tests are in test/ folder, run them using rebar:
 
-    $ rebar eunit
+    $ rebar3 eunit
+
+Dialyzer
+
+    $ rebar3 dialyzer
 
 Run console to test server:
 
