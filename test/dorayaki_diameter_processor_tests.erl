@@ -1,7 +1,13 @@
+%%%-------------------------------------------------------------------
+%% @hidden
+%%%-------------------------------------------------------------------
+
 -module(dorayaki_diameter_processor_tests).
+-copyright('Copyright (c) 2016 Thomas Bhatia').
+-author('thomas.bhatia@eo.io').
 
 -ifdef(TEST).
-  
+ 
 -include_lib("eunit/include/eunit.hrl").
 
 -endif.

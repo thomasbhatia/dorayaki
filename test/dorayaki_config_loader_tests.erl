@@ -1,4 +1,10 @@
+%%%-------------------------------------------------------------------
+%% @hidden
+%%%-------------------------------------------------------------------
+
 -module(dorayaki_config_loader_tests).
+-copyright('Copyright (c) 2016 Thomas Bhatia').
+-author('thomas.bhatia@eo.io').
 
 -ifdef(TEST).
   
