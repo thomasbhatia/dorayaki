@@ -125,7 +125,7 @@ Example config file
 Modules
 -------
 
-See [Modules](Modules.md)
+See [Modules](https://github.com/thomasbhatia/dorayaki/blob/master/apps/dorayaki/doc/README.md)
 
 
 
