@@ -1,9 +1,11 @@
 %%%-------------------------------------------------------------------
-%% @doc dorayaki config_loader public API
+%% @doc Dorayaki config_loader public API
 %% @end
 %%%-------------------------------------------------------------------
 
 -module(dorayaki_config_loader).
+-copyright('Copyright (c) 2016 Thomas Bhatia').
+-author('thomas.bhatia@eo.io').
 
 -ifdef(TEST).
 
@@ -21,27 +23,18 @@
 
 -export([load_config/0]).
 
+%%%-------------------------------------------------------------------
+%% @doc 
+%% @end
+%%%-------------------------------------------------------------------
+
+-spec get_env(atom()) -> any().
+
 get_env(Key) ->
     {ok, Value} = application:get_env(?APPLICATION, Key),
-	Value.
+    Value.
 
-%%====================================================================
-%% Internal functions
-%%====================================================================
-
-get_config_path() ->
-    Config_path = case code:priv_dir(?APPLICATION) of
-        {error, bad_name} ->
-            case filelib:is_dir(filename:join(["..", priv])) of
-                true ->
-                    filename:join(["..", priv, ?CONFIG_FILE]);
-                _ ->
-                    filename:join([priv, ?CONFIG_FILE])
-            end;
-        Dir ->
-            filename:join(Dir, ?CONFIG_FILE)
-    end,
-    {ok, Config_path}.
+-spec load_config() -> {'ok','done'}.
 
 load_config() ->
     {ok, Config_path} = get_config_path(),
@@ -49,6 +42,8 @@ load_config() ->
     {ok, ConfigList} = file:consult(Config_path),
     lager:log(debug, "console", "ConfigList: ~p", [ConfigList]),
     load_config(ConfigList).
+
+-spec load_config([{atom(),_}]) -> {'ok','done'}.
 
 load_config([{ConfigName, ConfigValue}|RestConfig]) when ConfigName =:= log -> 
     Log_level = proplists:get_value(level, ConfigValue),
@@ -64,4 +59,24 @@ load_config([{ConfigName, ConfigValue}|RestConfig]) ->
 
 load_config([]) ->
     {ok, done}.
+
+%%====================================================================
+%% @private Internal functions
+%%====================================================================
+
+-spec get_config_path() -> {'ok',binary() | string()}.
+
+get_config_path() ->
+    Config_path = case code:priv_dir(?APPLICATION) of
+        {error, bad_name} ->
+            case filelib:is_dir(filename:join(["..", priv])) of
+                true ->
+                    filename:join(["..", priv, ?CONFIG_FILE]);
+                _ ->
+                    filename:join([priv, ?CONFIG_FILE])
+            end;
+        Dir ->
+            filename:join(Dir, ?CONFIG_FILE)
+    end,
+    {ok, Config_path}.
 

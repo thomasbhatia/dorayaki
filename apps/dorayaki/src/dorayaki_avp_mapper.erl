@@ -1,9 +1,17 @@
+%%%-------------------------------------------------------------------
+%% @doc Dorayaki avp_mapper public API
+%% @end
+%%%-------------------------------------------------------------------
+
 -module(dorayaki_avp_mapper).
-  
--export([num_to_type/1]).
+-copyright('Copyright (c) 2016 Thomas Bhatia').
+-author('thomas.bhatia@eo.io').
 
 -include("lib.hrl").
 
+-export([num_to_type/1]).
+
+-spec num_to_type(_) -> 'error' | {'ok',_}.
 num_to_type(Num) ->
 AVP_TYPE = [
 {1, ?UTF8String},
