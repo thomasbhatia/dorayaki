@@ -1,9 +1,16 @@
+%%%-------------------------------------------------------------------
+%% @doc Dorayaki host public API
+%% @end
+%%%-------------------------------------------------------------------
+
 -module('dorayaki_host').
- 
+-copyright('Copyright (c) 2016 Thomas Bhatia').
+-author('thomas.bhatia@eo.io').
+
 -behaviour(gen_server).
  
--define(HOST_IP, config_loader:get_env(host_ip)).
--define(HOST_PORT, config_loader:get_env(host_port)).
+-define(HOST_IP, dorayaki_config_loader:get_env(host_ip)).
+-define(HOST_PORT, dorayaki_config_loader:get_env(host_port)).
 
 -export([start/1]).
  
@@ -17,16 +24,19 @@
 
 -record(state, {client, server}).
 
+-spec start(port()) -> {'ok',pid()}.
 start(Client) ->
     {ok, Pid} = gen_server:start(?MODULE, Client, []),
     gen_tcp:controlling_process(Client, Pid),
     gen_server:cast(Pid, setup_socket),
     {ok, Pid}.
  
+-spec init(_) -> {'ok',#state{}}.
 init(Client) ->
     {ok, #state{client=Client}}.
  
  
+-spec handle_cast('setup_socket',#state{client::port()}) -> {'noreply',#state{client::port(),server::port()}} | {'stop',_,#state{client::port()}}.
 handle_cast(setup_socket, #state{client=Client}=State) ->
     lager:log(info, "console", "#############################"),
     lager:log(info, "console", "Connecting to Host at IP ~p on port ~p..... ", [?HOST_IP, ?HOST_PORT]),
@@ -43,6 +53,7 @@ handle_cast(setup_socket, #state{client=Client}=State) ->
     end.
  
 % handle connection termination
+-spec handle_info({'tcp_closed',_} | {'tcp',port(),binary() | maybe_improper_list(binary() | maybe_improper_list(any(),binary() | []) | byte(),binary() | []) | integer()},#state{}) -> <<_:32,_:_*8>> | {'noreply',#state{server::port()}} | {'stop','shutdown',#state{}}.
 handle_info({tcp_closed, Socket}, #state{client=Client, server=Server}=State) ->
     case Socket of
         Client ->
@@ -68,24 +79,28 @@ handle_info({tcp, Server, Bin}, #state{client=Client, server=Server}=State) ->
     check_data_integrity(Bin, State).
 
 % Doesn't do anything
+-spec handle_call(_,_,_) -> {'noreply','undefined'}.
 handle_call(_,_,_) -> 
-    {ok, undefined}.
+    {noreply, undefined}.
 
+-spec terminate(_,_) -> 'ok'.
 terminate(_Reason, _State) ->
     ok.
  
+-spec code_change(_,_,_) -> {'ok',_}.
 code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
 
 %%====================================================================
 %% Internal functions
 %%====================================================================
+-spec check_data_integrity(<<_:32,_:_*8>> | integer(),#state{server::port()}) -> <<_:32,_:_*8>> | {'noreply',#state{server::port()}}.
 check_data_integrity(Bin = <<_Version:8, Length:24, _Payload/binary>>, State) when Length =:= size(Bin) -> 
     lager:log(debug, "console", "CHECK 1."),
     lager:log(debug, "console", "Size of bin: ~w", [size(Bin)]),
     lager:log(debug, "console", "Length: ~w", [Length]),
     lager:log(debug, "console", "Bin is: ~w", [Bin]),
-    diameter_processor:process_packet(Bin, State);
+    dorayaki_diameter_processor:process_packet(Bin, State);
 
 check_data_integrity(Bin = <<_Version:8, Length:24, _Payload/binary>>, State) when Length < size(Bin) -> 
     lager:log(debug, "console", "CHECK 2."),

@@ -1,11 +1,11 @@
 %%%-------------------------------------------------------------------
-%% @doc dorayaki diameter_processor public API
+%% @doc Dorayaki diameter_processor public API
 %% @end
 %%%-------------------------------------------------------------------
 
--module(diameter_processor).
-
-% -define(TEST, test).
+-module(dorayaki_diameter_processor).
+-copyright('Copyright (c) 2016 Thomas Bhatia').
+-author('thomas.bhatia@eo.io').
 
 -define(APPLICATION, dorayaki).
 
@@ -56,47 +56,33 @@
 %%====================================================================
 -ifdef(TEST).
 
--define(Message, <<1,0,1,56,0,0,1,16,0,0,0,4,100,111,77,129,100,
-        111,77,129,0,0,1,7,64,0,0,35,107,121,108,101,45,
-        114,48,53,45,103,103,115,110,48,51,54,59,48,59,
-        56,55,50,57,53,48,53,56,0,0,0,1,2,64,0,0,12,0,0,
-        0,4,0,0,1,8,64,0,0,11,79,67,71,0,0,0,1,40,64,0,
-        0,22,111,99,103,46,104,117,97,119,101,105,46,99,
-        111,109,0,0,0,0,0,55,64,0,0,12,216,49,110,93,0,
-        0,1,22,64,0,0,12,255,255,255,255,0,0,1,12,64,0,
-        0,12,0,0,7,209,0,0,1,187,64,0,0,40,0,0,1,194,64,
-        0,0,12,0,0,0,0,0,0,1,188,64,0,0,19,51,52,54,49,
-        49,51,57,57,57,48,51,0,0,0,1,159,64,0,0,12,0,0,
-        0,0,0,0,1,160,64,0,0,12,0,0,0,1,0,0,1,200,0,0,0,
-        108,0,0,1,12,64,0,0,12,0,0,7,209,0,0,1,175,64,0,
-        0,36,0,0,1,164,64,0,0,12,0,152,150,127,0,0,1,
-        165,0,0,0,16,0,0,0,0,0,16,0,0,0,0,1,176,0,0,0,
-        12,0,0,0,3,0,0,1,183,0,0,0,12,255,255,255,255,0,
-        0,3,101,192,0,0,16,0,0,40,175,0,3,32,0,0,0,1,
-        192,64,0,0,12,0,0,7,8>>).
+-export([process_packet/1]).
+-export([get_padding/2]).
 
--define(SearchHeader, [{commandcode, 271}]).
+-define(SearchHeader, [{commandcode, 272}]).
 -define(SearchAVPs, [{?Result_Code, 2001}, {?Multiple_Services_Credit_Control, [{?Result_Code, 4012}]}]).
 -define(ReplaceAVP, [{?Result_Code, 4012}]).
 
 -else.
 
 %% Here get SearchHeader and SearchAVPs from config_loader.
--define(SearchHeader, config_loader:get_env(search_header)).
--define(SearchAVPs, config_loader:get_env(search_avps)).
+-define(SearchHeader, dorayaki_config_loader:get_env(search_header)).
+-define(SearchAVPs, dorayaki_config_loader:get_env(search_avps)).
 
 %% Here get ReplaceAVP from config_loader.
--define(ReplaceAVP, config_loader:get_env(replace_avp)).
+-define(ReplaceAVP, dorayaki_config_loader:get_env(replace_avp)).
 
 -endif.
 
 %%====================================================================
-%% API
+%% @doc Dorayaki diameter_processor public API
+%% @end
 %%====================================================================
 
 -define(Replace, [?ReplaceAVP]).
 
 % 0. Preprocess
+-spec process_packet('false' | binary() | {'false',_,_,_} | {'true',_,_,_} | {'true',boolean(),_,_,_},#state{client::port(),server::port()}) -> {'noreply',#state{client::port(),server::port()}}.
 process_packet(Data, State) ->
     lager:log(debug, "console", "CHECK 5."),
     case process_packet(Data) of 
@@ -114,9 +100,13 @@ process_packet(Data, State) ->
     {noreply, State}.
 
 
+%%====================================================================
+%% @private Internal functions
+%%====================================================================
+
 % 1. Check Diameter Headers 
+-spec process_packet('false' | binary() | {'false',_,_,_} | {'true',_,_,_} | {'true',boolean(),_,_,_}) -> binary() | [].
 process_packet(<<Bin/binary>>) ->
-    % io:format("Bin is ~p~n", [<<Bin/binary>>]),
     % Check if Headers match search
     lager:log(debug, "console", "process_packet 1. ~w", [<<Bin/binary>>]),
     process_packet(is_header_match(<<Bin/binary>>));
@@ -153,10 +143,8 @@ process_packet(false) ->
     lager:log(debug, "console", "AVPs do not match, abandon search."),
     [].
 
-
-%%====================================================================
-%% Internal functions
-%%====================================================================
+%% @private
+-spec get_padding(_,non_neg_integer()) -> 0 | 1 | 2 | 3 | 8 | 16 | 24 | 32.
 get_padding(Code, AVP_length) ->
     case lists:member(Code, ?AVP_PADDING) of
         true  -> 
@@ -174,6 +162,7 @@ get_padding(Code, AVP_length) ->
 %%%%%%%%
 % Check header match
 %%%%%%%%
+-spec is_header_match(bitstring()) -> [] | {'false',binary(),[{_,_},...],#diameter_message{version::byte(),length::non_neg_integer(),is_request::0 | 1,is_proxiable::0 | 1,is_error::0 | 1,is_retransmitted::0 | 1,cmd_code::non_neg_integer(),application_id::non_neg_integer(),hop_by_hop_id::non_neg_integer(),end_to_end_id::non_neg_integer(),raw_data::[any(),...],avps::[]}} | {'true',binary(),[{_,_},...],#diameter_message{version::byte(),length::non_neg_integer(),is_request::0 | 1,is_proxiable::0 | 1,is_error::0 | 1,is_retransmitted::0 | 1,cmd_code::non_neg_integer(),application_id::non_neg_integer(),hop_by_hop_id::non_neg_integer(),end_to_end_id::non_neg_integer(),raw_data::[any(),...],avps::[]}}.
 is_header_match(<<Version:8, Length:24, R:1, P:1, E:1, T:1, Reserved:4, Command:24, AppId:32, HopByHopId:32, EndToEndId:32, Rest/binary>>) ->
     HeaderList = [{version, Version}, {length, Length}, {request, R}, 
         {proxiable, P}, {error, E}, {retransmitted, T}, {reserved, Reserved}, {commandcode, Command}, 
@@ -203,6 +192,7 @@ is_header_match(_) ->
 %%%%%%%%
 % Check AVPs match
 %%%%%%%%
+-spec is_AVP_match(boolean(),_,[{non_neg_integer(),bitstring() | [any()] | integer()}],_,_) -> 'false' | {'true',boolean(),[{_,_}],_,_}.
 is_AVP_match(true, <<Code:32, Vendor:1, Mandatory:1, Protected:1, _Reserved:5, Length:24, Rest/binary>>, Acc, HeaderList, DiaMessage) ->
     lager:log(debug, "console", "Start matching AVP"),
     lager:log(debug, "console", "AVP Code: ~w", [Code]),
@@ -216,7 +206,7 @@ is_AVP_match(true, <<Code:32, Vendor:1, Mandatory:1, Protected:1, _Reserved:5, L
     BodyLength = ((Length * 8) - 64),
     lager:log(debug, "console", "AVP BodyLength: ~w", [BodyLength]),
 
-    AVPBin = <<_Value:BodyLength, _padding:Padding, Rest2/binary>> = <<Rest/binary>>,
+    <<_Value:BodyLength, _padding:Padding, Rest2/binary>> = <<Rest/binary>>,
 
     %% Optimise!
     Type = dorayaki_avp_mapper:num_to_type(Code),
@@ -306,11 +296,13 @@ is_AVP_match(_, _, _, _, _) ->
     false.
 
 %%% Grouped AVP search
+-spec is_Grouped_AVP_match(bitstring(),#diameter_avp_new{code::non_neg_integer(),v::0 | 1,m::0 | 1,p::0 | 1,length::non_neg_integer(),value::bitstring() | [[any()],...] | integer(),padding::0 | 1 | 2 | 3 | 8 | 16 | 24 | 32,raw_data::[bitstring(),...],grouped::[]}) -> 'false' | {'true',boolean(),[{_,_}],#diameter_avp_new{code::non_neg_integer(),v::0 | 1,m::0 | 1,p::0 | 1,length::non_neg_integer(),value::bitstring() | [any(),...] | integer(),padding::0 | 1 | 2 | 3 | 8 | 16 | 24 | 32,raw_data::[any(),...],grouped::[any()]}}.
 is_Grouped_AVP_match(Bin, AVPR) ->
     Acc = [],
     AVPRecordList = [],
     is_Grouped_AVP_match(true, Bin, Acc, AVPR).
 
+-spec is_Grouped_AVP_match(boolean(),bitstring(),[{non_neg_integer(),[any(),...] | integer()}],#diameter_avp_new{code::non_neg_integer(),v::0 | 1,m::0 | 1,p::0 | 1,length::non_neg_integer(),value::bitstring() | [[any()],...] | integer(),padding::0 | 1 | 2 | 3 | 8 | 16 | 24 | 32,raw_data::[bitstring(),...],grouped::[{_,_,_,_,_,_,_,_,_,_}]}) -> 'false' | {'true',boolean(),[{_,_}],#diameter_avp_new{code::non_neg_integer(),v::0 | 1,m::0 | 1,p::0 | 1,length::non_neg_integer(),value::bitstring() | [any(),...] | integer(),padding::0 | 1 | 2 | 3 | 8 | 16 | 24 | 32,raw_data::[any(),...],grouped::[any()]}}.
 is_Grouped_AVP_match(true, <<Code:32, Vendor:1, Mandatory:1, Protected:1, _Reserved:5, Length:24, Rest/binary>>, Acc, AVPR) ->
     lager:log(debug, "console", "Start matching within Group AVP"),
     lager:log(debug, "console", "AVP within group, Code: ~p", [Code]),
@@ -399,6 +391,7 @@ lager:log(error, "console", "Grouped AVP cycle went wrong, value unknown"),
 %%%%%%%%%
 % EDITOR
 %%%%%%%%%
+-spec editor(maybe_improper_list(),_) -> {[any()],_}.
 editor(Acc, HeaderList) ->
     lager:log(debug, "console", "Editor received accumulator ~w", [Acc]),
     [{Code, Value}| Rest ] = ?ReplaceAVP,
@@ -411,6 +404,7 @@ editor(Acc, HeaderList) ->
 %%%%%%%%%
 % PACKER
 %%%%%%%%%
+-spec packer([{integer(),_}],[{'appId' | 'commandcode' | 'endToEndId' | 'error' | 'hopByHopId' | 'length' | 'proxiable' | 'request' | 'reserved' | 'retransmitted' | 'version',integer()},...],_) -> binary().
 packer(AVPList, HeaderList, DiaMessage) ->
     lager:log(debug, "console", "Packer received AVPList ~w", [AVPList]),
 
@@ -418,15 +412,18 @@ packer(AVPList, HeaderList, DiaMessage) ->
     HeaderBin = packHeader(HeaderList),
     iolist_to_binary([HeaderBin, AVPBins]).
 
+-spec packHeader([{'appId' | 'commandcode' | 'endToEndId' | 'error' | 'hopByHopId' | 'length' | 'proxiable' | 'request' | 'reserved' | 'retransmitted' | 'version',integer()},...]) -> <<_:160>>.
 packHeader([{version, Version}, {length, Length}, {request, R}, 
         {proxiable, P}, {error, E}, {retransmitted, T}, {reserved, Reserved}, {commandcode, Command}, 
         {appId, AppId}, {hopByHopId, HopByHopId}, {endToEndId, EndToEndId}]) ->
     <<Version:8, Length:24, R:1, P:1, E:1, T:1, Reserved:4, Command:24, AppId:32, HopByHopId:32, EndToEndId:32>>.
    
 
+-spec packAVP([{integer(),_}],_) -> [[bitstring() | tuple(),...]].
 packAVP(AVPList, DiaMessage) ->
     packAVP(AVPList, [], DiaMessage).
 
+-spec packAVP([{integer(),_}],[[bitstring() | tuple(),...]],_) -> [[bitstring() | tuple(),...]].
 packAVP([{Code, _Value}|AVPList], AVPBins, DiaMessage) ->
     lager:log(debug, "console", "PackAVP recieved code ~w", [Code]),
     lager:log(debug, "console", "PackAVP recieved value ~w", [_Value]),

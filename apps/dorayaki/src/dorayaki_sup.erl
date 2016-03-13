@@ -1,9 +1,11 @@
 %%%-------------------------------------------------------------------
-%% @doc dorayaki top level supervisor.
+%% @doc Dorayaki top level supervisor.
 %% @end
 %%%-------------------------------------------------------------------
 
 -module('dorayaki_sup').
+-copyright('Copyright (c) 2016 Thomas Bhatia').
+-author('thomas.bhatia@eo.io').
 
 -behaviour(supervisor).
 
@@ -19,8 +21,9 @@
 %% API functions
 %%====================================================================
 
+-spec start_link() -> 'ignore' | {'error',_} | {'ok',pid()}.
 start_link() ->
-    config_loader:load_config(),
+    dorayaki_config_loader:load_config(),
     {ok, CLIENT_PORT} = application:get_env(dorayaki, client_port),
 
     lager:log(debug, "console", "CLIENT_PORT at start_link ~p", [CLIENT_PORT]),
@@ -30,6 +33,7 @@ start_link() ->
 %% Supervisor callbacks
 %%====================================================================
 
+-spec init([any(),...]) -> {'ok',{{'one_for_one',3,3600},[{_,_,_,_,_,_},...]}}.
 init([CLIENT_PORT]) ->
     RestartStrategy = one_for_one,
     MaxRestarts = 3,

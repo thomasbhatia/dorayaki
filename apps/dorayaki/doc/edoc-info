@@ -1,0 +1,5 @@
+%% encoding: UTF-8
+{application,dorayaki}.
+{modules,[dorayaki_app,dorayaki_avp_mapper,dorayaki_client,
+          dorayaki_config_loader,dorayaki_diameter_processor,dorayaki_host,
+          dorayaki_sup]}.

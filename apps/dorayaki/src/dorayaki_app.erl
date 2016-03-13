@@ -1,13 +1,14 @@
 %%%-------------------------------------------------------------------
-%% @doc dorayaki public API
+%% @doc Dorayaki public APIs; Application callbacks
 %% @end
 %%%-------------------------------------------------------------------
 
 -module('dorayaki_app').
+-copyright('Copyright (c) 2016 Thomas Bhatia').
+-author('thomas.bhatia@eo.io').
 
 -behaviour(application).
 
-%% Application callbacks
 -export([start/2
         ,stop/1]).
 
@@ -15,10 +16,12 @@
 %% API
 %%====================================================================
 
+-spec start(_,_) -> {'error',_} | {'ok',pid()}.
 start(_StartType, _StartArgs) ->
     'dorayaki_sup':start_link().
 
 %%--------------------------------------------------------------------
+-spec stop(_) -> 'ok'.
 stop(_State) ->
     ok.
 

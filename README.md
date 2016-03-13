@@ -1,7 +1,7 @@
 
 ![dorayaki](https://cloud.githubusercontent.com/assets/1307449/13060300/4be43692-d428-11e5-975f-3908a865d488.png)
 
-Dorayaki [![TravisCI build](https://travis-ci.org/thomasbhatia/dorayaki.svg?branch=master)](https://travis-ci.org/thomasbhatia/dorayaki)
+Dorayaki [![TravisCI build](https://travis-ci.org/thomasbhatia/dorayaki.svg?branch=master)](https://travis-ci.org/thomasbhatia/dorayaki) [![License](https://img.shields.io/badge/License-BSD-blue.svg)](LICENSE)
 =====
 
 By Thomas Bhatia (thomas.bhatia@eo.io)
@@ -44,20 +44,54 @@ Dorayaki is not a Relay Agent and does not conform to RFC 6733 sec. 2.8.1. Doray
 
 Build
 -----
+
 Dorayaki uses Rebar 3
+    
+    $ rebar3 as dev compile && rebar3 as dev release
 
+    or
 
-    $ rebar3 compile
+    $ rebar3 as prod compile && rebar3 as prod release
+
 
 Test
 ------------
+Eunit tests are in test/ folder, run them using rebar:
+
+    $ rebar eunit
+
+Run console to test server:
 
     $ _build/default/rel/dorayaki/bin/dorayaki console
+
+#### Test using Seagull Traffic Generator
+
+I've include diameter scenario files for easy end-to-end testing using [Seagull](http://gull.sourceforge.net).
+You'll find it in the misc/ folder.
+
+##### Server side:
+Place the file in Seagull's diameter scenario folder:
+
+    $ cp ccr-cca.server.xml [...]seagull/diameter/scenario/ 
+
+Run 
+
+    ./seagull/diameter/run/start_server_cc.ksh
+
+##### Client side:
+Execute the start_client_cc:
+
+    ./seagull/diameter/run/start_client_cc.ksh
+
+Docs
+----
+
+    $ rebar3 edocs
 
 Release
 -------
 
-    $ rebar3 compile && rebar3 release
+    $ rebar3 compile && rebar3 as prod release
 
 
 Example config file
@@ -75,8 +109,8 @@ Example config file
     {search_header, [{commandcode, 272}]}.
 
     % Search AVPs is what Dorayaki will search for within the Diameter AVPs
-    % Here it's AVP 456 which is MSCC and within that result-code with value 4012
-    {search_avps, [{456, [{268, 4012}]}]}.
+    % Here it's AVP 268 result-code value 2001 and AVP 456 which is MSCC and within that result-code with value 4012
+    {search_avps, [{268, 2001}, {456, [{268, 4012}]}]}.
 
     % Replace Diameter AVP with these values.
     % Here AVP 268 result-code value will be replaced by 4012, i.e Credit-limit-reached.
@@ -87,11 +121,19 @@ Example config file
     % Debug level is very verbose, do not enable on live systems.
     {log_level, debug}.
 
+
+Modules
+-------
+
+See [Modules](Modules.md)
+
+
+
 Tips & Tricks
 -------------
 
 Reload config:
-    config_loader:load_config().
+    dorayaki_config_loader:dorayaki_load_config().
     
 
 Copyright

@@ -1,6 +1,6 @@
 {application, 'dorayaki',
  [{description, "Dorayaki is a Diameter stream editor."},
-  {vsn, "0.1.0"},
+  {vsn, "1.1.0"},
   {registered, []},
   {mod, {'dorayaki_app', []}},
   {applications,
