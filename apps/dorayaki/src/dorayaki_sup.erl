@@ -20,7 +20,7 @@
 %%====================================================================
 
 start_link() ->
-    config_loader:load_config(),
+    dorayaki_config_loader:load_config(),
     {ok, CLIENT_PORT} = application:get_env(dorayaki, client_port),
 
     lager:log(debug, "console", "CLIENT_PORT at start_link ~p", [CLIENT_PORT]),

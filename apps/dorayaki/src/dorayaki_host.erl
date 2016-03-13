@@ -2,8 +2,8 @@
  
 -behaviour(gen_server).
  
--define(HOST_IP, config_loader:get_env(host_ip)).
--define(HOST_PORT, config_loader:get_env(host_port)).
+-define(HOST_IP, dorayaki_config_loader:get_env(host_ip)).
+-define(HOST_PORT, dorayaki_config_loader:get_env(host_port)).
 
 -export([start/1]).
  
@@ -69,7 +69,7 @@ handle_info({tcp, Server, Bin}, #state{client=Client, server=Server}=State) ->
 
 % Doesn't do anything
 handle_call(_,_,_) -> 
-    {ok, undefined}.
+    {noreply, undefined}.
 
 terminate(_Reason, _State) ->
     ok.
@@ -85,7 +85,7 @@ check_data_integrity(Bin = <<_Version:8, Length:24, _Payload/binary>>, State) wh
     lager:log(debug, "console", "Size of bin: ~w", [size(Bin)]),
     lager:log(debug, "console", "Length: ~w", [Length]),
     lager:log(debug, "console", "Bin is: ~w", [Bin]),
-    diameter_processor:process_packet(Bin, State);
+    dorayaki_diameter_processor:process_packet(Bin, State);
 
 check_data_integrity(Bin = <<_Version:8, Length:24, _Payload/binary>>, State) when Length < size(Bin) -> 
     lager:log(debug, "console", "CHECK 2."),

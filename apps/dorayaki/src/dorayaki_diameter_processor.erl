@@ -1,13 +1,17 @@
 %%%-------------------------------------------------------------------
-%% @doc dorayaki diameter_processor public API
+%% @doc dorayaki_diameter_processor public API
 %% @end
 %%%-------------------------------------------------------------------
 
--module(diameter_processor).
-
-% -define(TEST, test).
+-module(dorayaki_diameter_processor).
 
 -define(APPLICATION, dorayaki).
+
+-ifdef (TEST).
+
+-export([get_padding/2]).
+
+-endif.
 
 -export([process_packet/2]).
 
@@ -56,37 +60,20 @@
 %%====================================================================
 -ifdef(TEST).
 
--define(Message, <<1,0,1,56,0,0,1,16,0,0,0,4,100,111,77,129,100,
-        111,77,129,0,0,1,7,64,0,0,35,107,121,108,101,45,
-        114,48,53,45,103,103,115,110,48,51,54,59,48,59,
-        56,55,50,57,53,48,53,56,0,0,0,1,2,64,0,0,12,0,0,
-        0,4,0,0,1,8,64,0,0,11,79,67,71,0,0,0,1,40,64,0,
-        0,22,111,99,103,46,104,117,97,119,101,105,46,99,
-        111,109,0,0,0,0,0,55,64,0,0,12,216,49,110,93,0,
-        0,1,22,64,0,0,12,255,255,255,255,0,0,1,12,64,0,
-        0,12,0,0,7,209,0,0,1,187,64,0,0,40,0,0,1,194,64,
-        0,0,12,0,0,0,0,0,0,1,188,64,0,0,19,51,52,54,49,
-        49,51,57,57,57,48,51,0,0,0,1,159,64,0,0,12,0,0,
-        0,0,0,0,1,160,64,0,0,12,0,0,0,1,0,0,1,200,0,0,0,
-        108,0,0,1,12,64,0,0,12,0,0,7,209,0,0,1,175,64,0,
-        0,36,0,0,1,164,64,0,0,12,0,152,150,127,0,0,1,
-        165,0,0,0,16,0,0,0,0,0,16,0,0,0,0,1,176,0,0,0,
-        12,0,0,0,3,0,0,1,183,0,0,0,12,255,255,255,255,0,
-        0,3,101,192,0,0,16,0,0,40,175,0,3,32,0,0,0,1,
-        192,64,0,0,12,0,0,7,8>>).
+-export([process_packet/1]).
 
--define(SearchHeader, [{commandcode, 271}]).
+-define(SearchHeader, [{commandcode, 272}]).
 -define(SearchAVPs, [{?Result_Code, 2001}, {?Multiple_Services_Credit_Control, [{?Result_Code, 4012}]}]).
 -define(ReplaceAVP, [{?Result_Code, 4012}]).
 
 -else.
 
 %% Here get SearchHeader and SearchAVPs from config_loader.
--define(SearchHeader, config_loader:get_env(search_header)).
--define(SearchAVPs, config_loader:get_env(search_avps)).
+-define(SearchHeader, dorayaki_config_loader:get_env(search_header)).
+-define(SearchAVPs, dorayaki_config_loader:get_env(search_avps)).
 
 %% Here get ReplaceAVP from config_loader.
--define(ReplaceAVP, config_loader:get_env(replace_avp)).
+-define(ReplaceAVP, dorayaki_config_loader:get_env(replace_avp)).
 
 -endif.
 
@@ -116,7 +103,6 @@ process_packet(Data, State) ->
 
 % 1. Check Diameter Headers 
 process_packet(<<Bin/binary>>) ->
-    % io:format("Bin is ~p~n", [<<Bin/binary>>]),
     % Check if Headers match search
     lager:log(debug, "console", "process_packet 1. ~w", [<<Bin/binary>>]),
     process_packet(is_header_match(<<Bin/binary>>));
@@ -216,7 +202,7 @@ is_AVP_match(true, <<Code:32, Vendor:1, Mandatory:1, Protected:1, _Reserved:5, L
     BodyLength = ((Length * 8) - 64),
     lager:log(debug, "console", "AVP BodyLength: ~w", [BodyLength]),
 
-    AVPBin = <<_Value:BodyLength, _padding:Padding, Rest2/binary>> = <<Rest/binary>>,
+    <<_Value:BodyLength, _padding:Padding, Rest2/binary>> = <<Rest/binary>>,
 
     %% Optimise!
     Type = dorayaki_avp_mapper:num_to_type(Code),
