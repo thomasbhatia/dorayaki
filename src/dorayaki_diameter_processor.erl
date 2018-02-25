@@ -122,10 +122,10 @@
 -define(REPLACE, [?ReplaceAVP]).
 
 % 0. Preprocess
--spec process_packet(false |
-                     binary() |
-                     {false, _, _, _} |
-                     {true, _, _, _}  |
+-spec process_packet(false                       |
+                     binary()                    |
+                     {false, _, _, _}            |
+                     {true, _, _, _}             |
                      {true, boolean(), _, _, _},
                      #state{client::port(), server::port()}) -> {noreply, #state{client::port(), server::port()}}.
 process_packet(Data, State) ->
@@ -134,12 +134,10 @@ process_packet(Data, State) ->
         [] ->
             lager:log(debug, console, "CHECK 6."),
             OutData = Data;
-
         Bin ->
             lager:log(debug, console, "CHECK 7."),
             OutData = Bin
     end,
-
     gen_tcp:send(State#state.client, OutData),
     inet:setopts(State#state.server, [{active, once}]),
     {noreply, State}.
@@ -159,19 +157,16 @@ do_process_packet(<<Bin/binary>>) ->
     % Check if Headers match search
     lager:log(debug, console, "do_process_packet 1. ~w", [<<Bin/binary>>]),
     do_process_packet(is_header_match(<<Bin/binary>>));
-
 % 2a. Header match
 do_process_packet({true, AVPBins, HeaderList, DiaMessage}) ->
     lager:log(debug, console, "Headers match, next check if AVPs match."),
     % Check if any AVPs match search
     Acc = [],
     do_process_packet(is_AVP_match(true, AVPBins, Acc, HeaderList, DiaMessage));
-
 % 2b. Header don't match
 do_process_packet({false, _, _, _}) ->
     lager:log(debug, console, "Headers do not match, abandon search."),
     [];
-
 % 3a. Header, AVP match and accumulator
 do_process_packet({true, true, Acc, HeaderList, DiaMessage}) ->
     % Edit messages
@@ -181,12 +176,10 @@ do_process_packet({true, true, Acc, HeaderList, DiaMessage}) ->
     MessageBin = packer(MessageList, HeaderList, DiaMessage),
     lager:log(debug, console, "AVPs replaced and this is final MessageBin ~w", [MessageBin]),
     MessageBin;
-
 % 3b. AVP value don't match
 do_process_packet({true, false, _Acc, _HeaderList, _DiaMessage}) ->
     lager:log(debug, console, "AVPs match but their values do not, abandon search."),
     [];
-
 % 3c. AVP don't match
 do_process_packet(false) ->
     lager:log(debug, console, "AVPs do not match, abandon search."),
@@ -215,7 +208,6 @@ get_padding(Code, AVP_length) ->
 -spec is_header_match(bitstring()) -> [] |
                                       {false, binary(), [{_, _}, ...], diameter_message()} |
                                       {true, binary(), [{_, _}, ...], diameter_message()}.
-
 is_header_match(<<Version:8,
                   Length:24,
                   R:1,
@@ -283,8 +275,6 @@ is_AVP_match(true,
     Padding = get_padding(Code, Length),
     BodyLength = ((Length * 8) - 64),
     <<Value0:BodyLength, _padding:Padding, Rest2/binary>> = <<Rest/binary>>,
-
-    %% Optimise!
     {ok, Type} = dorayaki_avp_mapper:num_to_type(Code),
     Value = get_value(Type, <<Value0:BodyLength>>, BodyLength),
     RawData = [<<Code:32, Vendor:1, Mandatory:1, Protected:1, _Reserved:5, Length:24>>,
@@ -298,7 +288,6 @@ is_AVP_match(true,
                 value = Value,
                 padding = Padding,
                 raw_data = RawData},
-
     KSAPR = get_ksapr(Code),
     {AVPR, AVP, Search} = get_aas(KSAPR, Type, <<Value0:BodyLength>>, AVPR1, Value, Code),
     D = DiaMessage,
@@ -308,17 +297,12 @@ is_AVP_match(true,
 
 is_AVP_match(true, <<>>, Acc, HeaderList, DiaMessage) ->
     lager:log(debug, console, "AVP search is done, next check if all filters match."),
-    lager:log(debug, console, "Accumulator ~p", [Acc]),
-
     AVP_filter_list_match = lists:all(fun(X) -> lists:member(X, Acc) end, ?SEARCH_AVPS),
     lager:log(debug, console, "AVP filter list match: ~p", [AVP_filter_list_match]),
-
     {true, AVP_filter_list_match, Acc, HeaderList, DiaMessage};
-
 is_AVP_match(false, _, _Acc, _HeaderList, _DiaMessage) ->
     lager:log(debug, console, "AVPs do not match"),
     false;
-
 is_AVP_match(_, _, _, _, _) ->
     lager:log(error, console, "AVP cycle went wrong, value unknown"),
     false.
@@ -338,30 +322,20 @@ get_aas({value, {Code, _}}, gro, Bin, AVPR1, RValue, Code) ->
     GAPVM = is_Grouped_AVP_match(Bin, AVPR1),
     case GAPVM of
         {true, true, GroupAcc, AVPR2} ->
-            AVPR = AVPR2,
-            AVP = {Code, GroupAcc},
-            Search = true;
+            {AVPR2, {Code, GroupAcc}, true};
         {true, false, GroupAcc, AVPR2} ->
-            AVPR = AVPR2,
-            AVP = {Code, GroupAcc},
-            Search = false;
+            {AVPR2, {Code, GroupAcc}, false};
         false ->
-            AVPR = AVPR1,
-            AVP = {Code, RValue},
-            Search = false
-    end,
-    {AVPR, AVP, Search};
-
+            {AVPR1, {Code, RValue}, false}
+    end;
 get_aas({value, {Code, Value}}, _Type, _Bin, AVPR, RValue, Code) when Value == RValue ->
     AVP = {Code, RValue},
     Search = true,
     {AVPR, AVP, Search};
-
 get_aas({value, {Code, Value}}, _Type, _Bin, AVPR, RValue, Code) when Value /= RValue ->
     AVP = {Code, RValue},
     Search = false,
     {AVPR, AVP, Search};
-
 get_aas(_, _Type, _Bin, AVPR, RValue, Code) ->
     AVP = {Code, RValue},
     Search = true,
@@ -387,18 +361,10 @@ check_Grouped_AVP_match(true,
     lager:log(debug, console, "AVP within group, Code: ~p, Length: ~p, Record: ~p", [Code, Length, AVPR]),
 
     Padding = get_padding(Code, Length),
-    lager:log(debug, console, "AVP within group, Padding: ~p", [Padding]),
-
     BodyLength = ((Length * 8) - 64),
-    lager:log(debug, console, "AVP within group, BodyLength: ~p", [BodyLength]),
-
     AVPBin = <<Value0:BodyLength, _padding:Padding, Rest2/binary>> = <<Rest/binary>>,
-
-    %% Optimise!
     {ok, Type} = dorayaki_avp_mapper:num_to_type(Code),
     Value = get_value(Type, <<Value0:BodyLength>>, BodyLength),
-
-    AVP = {Code, Value},
 
     NewSubAVPR = #diameter_avp_new
         {code = Code,
@@ -411,32 +377,12 @@ check_Grouped_AVP_match(true,
          raw_data = [AVPBin],
          grouped = []
          },
-
-    lager:log(debug, console, "Grouped AVP record: ~p, value: ~p", [NewSubAVPR, AVP]),
-
+    lager:log(debug, console, "Grouped AVP record: ~p, value: ~p", [NewSubAVPR, {Code, Value}]),
     GroupCode = AVPR#diameter_avp_new.code,
-    lager:log(debug, console, "Grouped code: ~p", [GroupCode]),
-
     {value, {GroupCode, SearchGroup}} = lists:keysearch(GroupCode, 1, ?SEARCH_AVPS),
-    lager:log(debug, console, "SearchGroup AVP value: ~p", [SearchGroup]),
-
-    case lists:keysearch(Code, 1, SearchGroup) of
-        % Found Code and value, set search to true
-        {value, {Code, Value}} ->
-            io:format(user, "Value1 ~p~n", [Value]),
-            Search = true;
-        % Found Code but value was not what we want, set search to false. Abandon search.
-        {value, {Code, _WrongValue}} ->
-            io:format(user, "Value2 ~p~n", [Value]),
-            Search = false;
-        % Not the code we're looking for so we'll carry on to the next avp, set search to true.
-        S ->
-            io:format(user, "Value3 ~p~n", [S]),
-            Search = true
-    end,
-
+    Search = get_grouped_search(Code, SearchGroup, Value),
     N = AVPR#diameter_avp_new.grouped,
-    check_Grouped_AVP_match(Search, Rest2, [AVP|Acc], AVPR#diameter_avp_new{grouped = [NewSubAVPR|N]});
+    check_Grouped_AVP_match(Search, Rest2, [{Code, Value}|Acc], AVPR#diameter_avp_new{grouped = [NewSubAVPR|N]});
 check_Grouped_AVP_match(true, <<>>, Acc, AVPR) ->
     lager:log(debug, console, "Grouped AVP search is done,
                                next check if all filters match. ~n
@@ -454,6 +400,19 @@ check_Grouped_AVP_match(false, _, _Acc, _DiaMessage) ->
 check_Grouped_AVP_match(_, _, _, _) ->
 lager:log(error, console, "Grouped AVP cycle went wrong, value unknown"),
     false.
+
+get_grouped_search(Code, SearchGroup, RValue) ->
+    do_grouped_search(lists:keysearch(Code, 1, SearchGroup), RValue).
+
+% Found Code and value, set search to true
+do_grouped_search({value, {_Code, Value}}, RValue) when Value == RValue ->
+    true;
+% Found Code but value was not what we want, set search to false. Abandon search.
+do_grouped_search({value, {_Code, Value}}, RValue) when Value /= RValue ->
+    false;
+ % Not the code we're looking for so we'll carry on to the next avp, set search to true.
+do_grouped_search(_, _) ->
+    true.
 
 % End Grouped
 
