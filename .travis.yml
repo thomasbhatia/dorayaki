@@ -1,10 +1,10 @@
+sudo: false
 language: erlang
-notifications:
-  email: false
 otp_release:
-   - R16B
-   - R16B03-1
-   - 17.0
-   - 17.1
-   - 18.0
-   - 18.1
+  - 20.0
+  - 19.3
+  - 18.1
+before_script:
+  - wget https://s3.amazonaws.com/rebar3-nightly/rebar3
+  - chmod u+x rebar3
+script: ./rebar3 compile && ./rebar3 eunit && ./rebar3 dialyzer && ./rebar3 as lint lint
