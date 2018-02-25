@@ -34,8 +34,6 @@
 %%%-------------------------------------------------------------------
 
 -module('dorayaki_sup').
--copyright('Copyright (c) 2016 Thomas Bhatia').
--author('thomas.bhatia@eo.io').
 
 -behaviour(supervisor).
 
@@ -73,15 +71,7 @@ init([CLIENT_PORT]) ->
     Shutdown = 2000,
     Type = worker,
 
-    Child = [{dorayaki_client, 
-             {dorayaki_client, start, [CLIENT_PORT]},
-             Restart, 
-             Shutdown, 
-             Type, 
-             [dorayaki_client]}],
+    Child = [{dorayaki_client, {dorayaki_client, start, [CLIENT_PORT]}, Restart, Shutdown, Type, [dorayaki_client]}],
 
     {ok, {SupFlags, Child}}.
 
-%%====================================================================
-%% Internal functions
-%%====================================================================

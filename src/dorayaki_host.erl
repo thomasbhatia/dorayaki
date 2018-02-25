@@ -34,34 +34,35 @@
 %%%-------------------------------------------------------------------
 
 -module('dorayaki_host').
--copyright('Copyright (c) 2016 Thomas Bhatia').
--author('thomas.bhatia@eo.io').
+
 
 -behaviour(gen_server).
 
+-define(SERVER, ?MODULE).
 -define(HOST_IP, dorayaki_config_loader:get_env(host_ip)).
 -define(HOST_PORT, dorayaki_config_loader:get_env(host_port)).
+-define(TIMEOUT, 0).
 
 -export([start/1]).
 
 %% gen_server callbacks
--export([init/1, handle_cast/2, handle_info/2, handle_call/3,
-         terminate/2, code_change/3]).
-
--define(SERVER, ?MODULE).
-
--define(TIMEOUT, 0).
+-export([init/1,
+         handle_cast/2,
+         handle_info/2,
+         handle_call/3,
+         terminate/2,
+         code_change/3]).
 
 -record(state, {client, server}).
 
--spec start(port()) -> {'ok',pid()}.
+-spec start(port()) -> {'ok', pid()}.
 start(Client) ->
     {ok, Pid} = gen_server:start(?MODULE, Client, []),
     gen_tcp:controlling_process(Client, Pid),
     gen_server:cast(Pid, setup_socket),
     {ok, Pid}.
 
--spec init(_) -> {'ok',#state{}}.
+-spec init(_) -> {'ok', #state{}}.
 init(Client) ->
     {ok, #state{client=Client}}.
 
@@ -70,8 +71,8 @@ init(Client) ->
 %% @doc handle connection setup
 %% @end
 %%%-------------------------------------------------------------------
--spec handle_cast(setup_socket, 
-                #state{client::port()}) -> {noreply, 
+-spec handle_cast(setup_socket,
+                  #state{client::port()}) -> {noreply,
                                             #state{client::port(), server::port()}} | {stop, _, #state{client::port()}}.
 handle_cast(setup_socket, #state{client=Client}=State) ->
     lager:log(info, console, "#############################"),
@@ -93,11 +94,11 @@ handle_cast(setup_socket, #state{client=Client}=State) ->
 %% @end
 %%%-------------------------------------------------------------------
 -spec handle_info({tcp_closed, _} |
-                  {tcp, 
-                    port(), 
-                    binary() | 
-                    maybe_improper_list(binary() | maybe_improper_list(any(), binary() | []) | byte(), binary() | []) | 
-                    integer()}, 
+                  {tcp,
+                    port(),
+                    binary() |
+                    maybe_improper_list(binary() | maybe_improper_list(any(), binary() | []) | byte(), binary() | []) |
+                    integer()},
                   #state{}) -> {noreply, #state{server::port()}} | {stop, shutdown, #state{}}.
 handle_info({tcp_closed, Socket}, #state{client=Client, server=Server}=State) ->
     case Socket of
@@ -125,22 +126,20 @@ handle_info({tcp, _Server, Bin}, State) ->
     check_data_integrity(Bin, State).
 
 % Doesn't do anything
--spec handle_call(_,_,_) -> {'noreply','undefined'}.
-handle_call(_,_,_) ->
+handle_call(_, _, _) ->
     {noreply, undefined}.
 
--spec terminate(_,_) -> 'ok'.
 terminate(_Reason, _State) ->
     ok.
 
--spec code_change(_,_,_) -> {'ok',_}.
 code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
 
 %%====================================================================
 %% Internal functions
 %%====================================================================
--spec check_data_integrity(<<_:32,_:_*8>> | integer(),#state{server::port()}) -> <<_:32,_:_*8>> | {'noreply',#state{server::port()}}.
+-spec check_data_integrity(<<_:32, _:_*8>> | integer(),
+                           #state{server::port()}) -> <<_:32, _:_*8>> | {'noreply', #state{server::port()}}.
 check_data_integrity(Bin = <<_Version:8, Length:24, _Payload/binary>>, State) when Length =:= size(Bin) ->
     dorayaki_diameter_processor:process_packet(Bin, State);
 
@@ -155,7 +154,6 @@ check_data_integrity(Bin = <<_Version:8, Length:24, _Payload/binary>>, State) wh
 check_data_integrity(Bin = <<_Version:8, Length:24, _Payload/binary>>, State) when Length > size(Bin) ->
     case gen_tcp:recv(State#state.server, 0, ?TIMEOUT) of
         {ok, NextBinList} ->
-            io:format("got more data from sock~w~n", [NextBinList]),
             NextBin = list_to_binary(NextBinList),
             NewBin = <<Bin/binary, NextBin/binary>>,
             check_data_integrity(NewBin, State);

@@ -44,7 +44,7 @@
 -include("dorayaki.hrl").
 
 -define(AVP_PADDING, [3, 263, 264, 283, 293, 296]).
--define(AVP_Type_Unsigned32, [268]).bit
+-define(AVP_TYPE_UNSIGNED32, [268]).
 -define(AVP_SUPPORT, [268, 456]).
 
 %%====================================================================
@@ -68,13 +68,13 @@
 
 -record(diameter_avp_new,
         {code :: non_neg_integer(),                         %% 32-bit unsigned
-         v :: 0 | 1,                          
+         v :: 0 | 1,
          m :: 0 | 1,
          p :: 0 | 1,
          length :: non_neg_integer(),
-         value :: bitstring() | [[any()],...] | integer(),  %% decoded term() decoded | undefined
+         value :: bitstring() | [[any()], ...] | integer(),  %% decoded term() decoded | undefined
          padding :: 0 | 1 | 2 | 3 | 8 | 16 | 24 | 32,       %% Padding = length - 8
-         raw_data :: bitstring(),
+         raw_data :: [bitstring()],
          grouped = [] :: [any()]
         }).
 
@@ -103,15 +103,15 @@
 -ifdef(TEST).
 -export([do_process_packet/1]).
 -export([get_padding/2]).
--define(SearchHeader, [{commandcode, 272}]).
--define(SearchAVPs, [{?Result_Code, 2001}, {?Multiple_Services_Credit_Control, [{?Result_Code, 4012}]}]).
--define(ReplaceAVP, [{?Result_Code, 4012}]).
+-define(SEARCH_HEADER, [{commandcode, 272}]).
+-define(SEARCH_AVPS, [{?Result_Code, 2001}, {?Multiple_Services_Credit_Control, [{?Result_Code, 4012}]}]).
+-define(REPLACE_AVP, [{?Result_Code, 4012}]).
 -else.
 %% Here get SearchHeader and SearchAVPs from config_loader.
--define(SearchHeader, dorayaki_config_loader:get_env(search_header)).
--define(SearchAVPs, dorayaki_config_loader:get_env(search_avps)).
+-define(SEARCH_HEADER, dorayaki_config_loader:get_env(search_header)).
+-define(SEARCH_AVPS, dorayaki_config_loader:get_env(search_avps)).
 %% Here get ReplaceAVP from config_loader.
--define(ReplaceAVP, dorayaki_config_loader:get_env(replace_avp)).
+-define(REPLACE_AVP, dorayaki_config_loader:get_env(replace_avp)).
 -endif.
 
 %%====================================================================
@@ -119,14 +119,14 @@
 %% @end
 %%====================================================================
 
--define(Replace, [?ReplaceAVP]).
+-define(REPLACE, [?ReplaceAVP]).
 
 % 0. Preprocess
--spec process_packet(false | 
-                     binary() | 
-                     {false, _, _, _} | 
-                     {true, _, _, _}  | 
-                     {true, boolean(), _, _, _}, 
+-spec process_packet(false |
+                     binary() |
+                     {false, _, _, _} |
+                     {true, _, _, _}  |
+                     {true, boolean(), _, _, _},
                      #state{client::port(), server::port()}) -> {noreply, #state{client::port(), server::port()}}.
 process_packet(Data, State) ->
     lager:log(debug, console, "CHECK 5."),
@@ -150,10 +150,10 @@ process_packet(Data, State) ->
 %%====================================================================
 
 % 1. Check Diameter Headers
--spec do_process_packet(false           | 
-                        binary()        | 
-                        {false, _, _, _}| 
-                        {true, _, _, _} | 
+-spec do_process_packet(false           |
+                        binary()        |
+                        {false, _, _, _}|
+                        {true, _, _, _} |
                         {true, boolean(), _, _, _}) -> binary() | [].
 do_process_packet(<<Bin/binary>>) ->
     % Check if Headers match search
@@ -212,31 +212,59 @@ get_padding(Code, AVP_length) ->
 %% @doc Check if AVP headers match our search criteria
 %% @end
 %%%-------------------------------------------------------------------
--spec is_header_match(bitstring()) -> [] | 
-                                      {false, binary(), [{_, _}, ...], diameter_message()} | 
+-spec is_header_match(bitstring()) -> [] |
+                                      {false, binary(), [{_, _}, ...], diameter_message()} |
                                       {true, binary(), [{_, _}, ...], diameter_message()}.
 
-is_header_match(<<Version:8, Length:24, R:1, P:1, E:1, T:1, Reserved:4, Command:24, AppId:32, HopByHopId:32, EndToEndId:32, Rest/binary>>) ->
-    HeaderList = [{version, Version}, {length, Length}, {request, R},
-        {proxiable, P}, {error, E}, {retransmitted, T}, {reserved, Reserved}, {commandcode, Command},
-        {appId, AppId}, {hopByHopId, HopByHopId}, {endToEndId, EndToEndId}],
+is_header_match(<<Version:8,
+                  Length:24,
+                  R:1,
+                  P:1,
+                  E:1,
+                  T:1,
+                  Reserved:4,
+                  Command:24,
+                  AppId:32,
+                  HopByHopId:32,
+                  EndToEndId:32,
+                  Rest/binary>>) ->
+        HeaderList = [{version, Version},
+                      {length, Length},
+                      {request, R},
+                      {proxiable, P},
+                      {error, E},
+                      {retransmitted, T},
+                      {reserved, Reserved},
+                      {commandcode, Command},
+                      {appId, AppId},
+                      {hopByHopId, HopByHopId},
+                      {endToEndId, EndToEndId}],
+        RawData = [<<Version:8,
+                   Length:24,
+                   R:1,
+                   P:1,
+                   E:1,
+                   T:1,
+                   Reserved:4,
+                   Command:24,
+                   AppId:32,
+                   HopByHopId:32,
+                   EndToEndId:32>>],
+        DiaMessage = #diameter_message{
+                        version = Version,
+                        length = Length,
+                        is_request = R,
+                        is_proxiable = P,
+                        is_error = E,
+                        is_retransmitted = T,
+                        cmd_code = Command,
+                        application_id = AppId,
+                        hop_by_hop_id = HopByHopId,
+                        end_to_end_id = EndToEndId,
+                        raw_data = RawData,
+                        avps = []}, %% boolean() T flag
 
-        DiaMessage = #diameter_message
-        {version = Version,
-         length = Length,
-         is_request = R,
-         is_proxiable = P,
-         is_error = E,
-         is_retransmitted = T,
-         cmd_code = Command,
-         application_id = AppId,
-         hop_by_hop_id = HopByHopId,
-         end_to_end_id = EndToEndId,
-         raw_data = [<<Version:8, Length:24, R:1, P:1, E:1, T:1, Reserved:4, Command:24, AppId:32, HopByHopId:32, EndToEndId:32>>],
-         avps = []
-         }, %% boolean() T flag
-
-    {lists:all(fun(X) -> lists:member(X, HeaderList) end, ?SearchHeader), Rest, HeaderList, DiaMessage};
+    {lists:all(fun(X) -> lists:member(X, HeaderList) end, ?SEARCH_HEADER), Rest, HeaderList, DiaMessage};
 
 is_header_match(_) ->
     lager:log(debug, console, "We don't understand the Diameter Header we recieved."),
@@ -247,7 +275,11 @@ is_header_match(_) ->
 %% @end
 %%%-------------------------------------------------------------------
 %-spec is_AVP_match(boolean(), _, _, _, _) -> 'false' | {'true',boolean(),[{_, _}], _, _}.
-is_AVP_match(true, <<Code:32, Vendor:1, Mandatory:1, Protected:1, _Reserved:5, Length:24, Rest/binary>>, Acc, HeaderList, DiaMessage) ->
+is_AVP_match(true,
+             <<Code:32, Vendor:1, Mandatory:1, Protected:1, _Reserved:5, Length:24, Rest/binary>>,
+             Acc,
+             HeaderList,
+             DiaMessage) ->
     Padding = get_padding(Code, Length),
     BodyLength = ((Length * 8) - 64),
     <<Value0:BodyLength, _padding:Padding, Rest2/binary>> = <<Rest/binary>>,
@@ -255,7 +287,8 @@ is_AVP_match(true, <<Code:32, Vendor:1, Mandatory:1, Protected:1, _Reserved:5, L
     %% Optimise!
     {ok, Type} = dorayaki_avp_mapper:num_to_type(Code),
     Value = get_value(Type, <<Value0:BodyLength>>, BodyLength),
-    RawData = <<Code:32, Vendor:1, Mandatory:1, Protected:1, _Reserved:5, Length:24>>, <<Value0:BodyLength, 0:Padding>>,
+    RawData = [<<Code:32, Vendor:1, Mandatory:1, Protected:1, _Reserved:5, Length:24>>,
+                <<Value0:BodyLength, 0:Padding>>],
     AVPR1 = #diameter_avp_new{
                 code = Code,
                 v = Vendor,
@@ -277,7 +310,7 @@ is_AVP_match(true, <<>>, Acc, HeaderList, DiaMessage) ->
     lager:log(debug, console, "AVP search is done, next check if all filters match."),
     lager:log(debug, console, "Accumulator ~p", [Acc]),
 
-    AVP_filter_list_match = lists:all(fun(X) -> lists:member(X, Acc) end, ?SearchAVPs),
+    AVP_filter_list_match = lists:all(fun(X) -> lists:member(X, Acc) end, ?SEARCH_AVPS),
     lager:log(debug, console, "AVP filter list match: ~p", [AVP_filter_list_match]),
 
     {true, AVP_filter_list_match, Acc, HeaderList, DiaMessage};
@@ -299,7 +332,7 @@ get_value(_Type, Bin, BodyLength) ->
     Value.
 
 get_ksapr(Code) ->
-    lists:keysearch(Code, 1, ?SearchAVPs).
+    lists:keysearch(Code, 1, ?SEARCH_AVPS).
 
 get_aas({value, {Code, _}}, gro, Bin, AVPR1, RValue, Code) ->
     GAPVM = is_Grouped_AVP_match(Bin, AVPR1),
@@ -343,8 +376,14 @@ get_aas(_, _Type, _Bin, AVPR, RValue, Code) ->
 is_Grouped_AVP_match(Bin, AVPR) ->
     check_Grouped_AVP_match(true, Bin, [], AVPR).
 
-%spec is_Grouped_AVP_match(boolean(),bitstring(),[{non_neg_integer(),[any(),...] | integer()}],#diameter_avp_new{code::non_neg_integer(),v::0 | 1,m::0 | 1,p::0 | 1,length::non_neg_integer(),value::bitstring() | [[any()],...] | integer(),padding::0 | 1 | 2 | 3 | 8 | 16 | 24 | 32,raw_data::[bitstring(),...],grouped::[{_,_,_,_,_,_,_,_,_,_}]}) -> 'false' | {'true',boolean(),[{_,_}],#diameter_avp_new{code::non_neg_integer(),v::0 | 1,m::0 | 1,p::0 | 1,length::non_neg_integer(),value::bitstring() | [any(),...] | integer(),padding::0 | 1 | 2 | 3 | 8 | 16 | 24 | 32,raw_data::[any(),...],grouped::[any()]}}.
-check_Grouped_AVP_match(true, <<Code:32, Vendor:1, Mandatory:1, Protected:1, _Reserved:5, Length:24, Rest/binary>>, Acc, AVPR) ->
+-spec check_Grouped_AVP_match(boolean(),
+                           bitstring(),
+                           [{non_neg_integer(), [any(), ...] | integer()}],
+                           diameter_avp_new()) -> false | {true, boolean(), [{_, _}], diameter_avp_new()}.
+check_Grouped_AVP_match(true,
+                        <<Code:32, Vendor:1, Mandatory:1, Protected:1, _Reserved:5, Length:24, Rest/binary>>,
+                        Acc,
+                        AVPR) ->
     lager:log(debug, console, "AVP within group, Code: ~p, Length: ~p, Record: ~p", [Code, Length, AVPR]),
 
     Padding = get_padding(Code, Length),
@@ -369,7 +408,7 @@ check_Grouped_AVP_match(true, <<Code:32, Vendor:1, Mandatory:1, Protected:1, _Re
          length = Length,
          value = Value,
          padding = Padding,
-         raw_data = AVPBin,
+         raw_data = [AVPBin],
          grouped = []
          },
 
@@ -378,7 +417,7 @@ check_Grouped_AVP_match(true, <<Code:32, Vendor:1, Mandatory:1, Protected:1, _Re
     GroupCode = AVPR#diameter_avp_new.code,
     lager:log(debug, console, "Grouped code: ~p", [GroupCode]),
 
-    {value, {GroupCode, SearchGroup}} = lists:keysearch(GroupCode, 1, ?SearchAVPs),
+    {value, {GroupCode, SearchGroup}} = lists:keysearch(GroupCode, 1, ?SEARCH_AVPS),
     lager:log(debug, console, "SearchGroup AVP value: ~p", [SearchGroup]),
 
     case lists:keysearch(Code, 1, SearchGroup) of
@@ -398,14 +437,12 @@ check_Grouped_AVP_match(true, <<Code:32, Vendor:1, Mandatory:1, Protected:1, _Re
 
     N = AVPR#diameter_avp_new.grouped,
     check_Grouped_AVP_match(Search, Rest2, [AVP|Acc], AVPR#diameter_avp_new{grouped = [NewSubAVPR|N]});
-
-
 check_Grouped_AVP_match(true, <<>>, Acc, AVPR) ->
-    lager:log(debug, console, "Grouped AVP search is done, 
+    lager:log(debug, console, "Grouped AVP search is done,
                                next check if all filters match. ~n
                                Grouped Accumulator ~p", [Acc]),
     GroupCode = AVPR#diameter_avp_new.code,
-    {value, {GroupCode, SearchGroup}} = lists:keysearch(GroupCode, 1, ?SearchAVPs),
+    {value, {GroupCode, SearchGroup}} = lists:keysearch(GroupCode, 1, ?SEARCH_AVPS),
 
     Grouped_AVP_filter_list_match = lists:all(fun(X) -> lists:member(X, Acc) end, SearchGroup),
     lager:log(debug, console, "AVP filter list match: ~p", [Grouped_AVP_filter_list_match]),
@@ -424,9 +461,9 @@ lager:log(error, console, "Grouped AVP cycle went wrong, value unknown"),
 %% @doc Edit packets payload
 %% @end
 %%%-------------------------------------------------------------------
--spec editor(maybe_improper_list(),_) -> {[any()],_}.
+-spec editor(maybe_improper_list(), _) -> {[any()], _}.
 editor(Acc, HeaderList) ->
-    [{Code, Value}| _Rest ] = ?ReplaceAVP,
+    [{Code, Value}| _Rest ] = ?REPLACE_AVP,
     MessageList = lists:keyreplace(Code, 1, Acc, {Code, Value}),
     {MessageList, HeaderList}.
 
@@ -434,7 +471,7 @@ editor(Acc, HeaderList) ->
 %% @doc Construct AVP by wrapping
 %% @end
 %%%-------------------------------------------------------------------
--spec packer([{integer(),_}], avp_headers() ,_) -> binary().
+-spec packer([{integer(), _}], avp_headers(), _) -> binary().
 packer(AVPList, HeaderList, DiaMessage) ->
     lager:log(debug, console, "Packer received AVPList ~w", [AVPList]),
 
@@ -489,26 +526,20 @@ packAVP([{Code, Value0}|AVPList], AVPBins, DiaMessage) ->
 
     lager:log(debug, console, "AVP Vz ~w, Mz ~w, Pz ~w flag ~w", [Vz, Mz, Pz]),
 
-    Flags = <<Vz:1,Mz:1,Pz:1,0:1,0:1,0:1,0:1,0:1>>,
-    lager:log(debug, console, "AVP full flag ~w", [Flags]),
-
+    Flags = <<Vz:1, Mz:1, Pz:1, 0:1, 0:1, 0:1, 0:1, 0:1>>,
     AVPBin = case dorayaki_avp_mapper:num_to_type(Code) of
         {ok, arb} ->
             Value = list_to_binary(Value0),
             Length = get_avp_length(Value),
             Pad = get_padding(Code, Length),
-
             Padding = <<0:Pad>>,
-            [<<Code:32>>, Flags, <<Length:24>>, Value, Padding];
-
+            get_avp_bin(Code, Flags, Length, Value, Padding);
         {ok, gro} ->
             Value = Lz#diameter_avp_new.value,
             Length = get_avp_length(Value),
             Pad = get_padding(Code, Length),
-
             Padding = <<0:Pad>>,
-            [<<Code:32>>, Flags, <<Length:24>>, Value, Padding];
-
+            get_avp_bin(Code, Flags, Length, Value, Padding);
         {ok, Length} ->
             Value = Value0,
             [<<Code:32>>, Flags, <<Length:24>>, <<Value:32>>]
@@ -517,7 +548,8 @@ packAVP([{Code, Value0}|AVPList], AVPBins, DiaMessage) ->
 packAVP([], AVPBins, _DiaMessage) ->
     AVPBins.
 
-
 get_avp_length(Value) ->
     (4+1+3+size(Value)).
 
+get_avp_bin(Code, Flags, Length, Value, Padding) ->
+    [<<Code:32>>, Flags, <<Length:24>>, Value, Padding].
