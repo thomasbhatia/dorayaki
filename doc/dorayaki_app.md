@@ -25,17 +25,11 @@ __Behaviours:__ [`application`](application.md).
 
 ### start/2 ###
 
-<pre><code>
-start(StartType::term(), StartArgs::term()) -&gt; {error, term()} | {ok, pid()}
-</code></pre>
-<br />
+`start(StartType, StartArgs) -> any()`
 
 <a name="stop-1"></a>
 
 ### stop/1 ###
 
-<pre><code>
-stop(State::term()) -&gt; ok
-</code></pre>
-<br />
+`stop(State) -> any()`
 

@@ -11,7 +11,13 @@
   {env,[]},
   {modules, []},
 
-  {contributors, []},
-  {licenses, []},
-  {links, []}
+  {maintainers, [
+    "Thomas Bhatia"
+  ]},
+  {licenses, [
+    "BSD"
+  ]},
+  {links, [
+    {"Github", "https://github.com/thomasbhatia/dorayaki"}
+  ]}
  ]}.

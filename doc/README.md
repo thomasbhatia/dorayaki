@@ -12,6 +12,7 @@
 <tr><td><a href="dorayaki_client.md" class="module">dorayaki_client</a></td></tr>
 <tr><td><a href="dorayaki_config_loader.md" class="module">dorayaki_config_loader</a></td></tr>
 <tr><td><a href="dorayaki_diameter_processor.md" class="module">dorayaki_diameter_processor</a></td></tr>
+<tr><td><a href="dorayaki_diameter_processor_tests.md" class="module">dorayaki_diameter_processor_tests</a></td></tr>
 <tr><td><a href="dorayaki_host.md" class="module">dorayaki_host</a></td></tr>
 <tr><td><a href="dorayaki_sup.md" class="module">dorayaki_sup</a></td></tr></table>
 
